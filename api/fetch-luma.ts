@@ -74,45 +74,81 @@ function parseEventHtml(html: string): LumaEventData | null {
     const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
     const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
 
-    // Extract JSON-LD structured data
-    const jsonLdMatch = html.match(/<script\s+type="application\/ld\+json">(.+?)<\/script>/s);
+    // Extract ALL JSON-LD structured data blocks
+    const jsonLdMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>(.+?)<\/script>/gs);
 
     let eventData: LumaEventData | null = null;
 
-    if (jsonLdMatch) {
+    // Try to find Event schema in any JSON-LD block
+    for (const match of jsonLdMatches) {
       try {
-        const jsonData = JSON.parse(jsonLdMatch[1]);
+        const jsonData = JSON.parse(match[1]);
 
-        if (jsonData['@type'] === 'Event') {
+        // Handle both single Event and array of schemas
+        const eventSchema = Array.isArray(jsonData)
+          ? jsonData.find((item: any) => item['@type'] === 'Event')
+          : (jsonData['@type'] === 'Event' ? jsonData : null);
+
+        if (eventSchema) {
+          // Extract location with multiple fallbacks
+          let locationName = '';
+          let locationAddress = '';
+
+          if (eventSchema.location) {
+            if (typeof eventSchema.location === 'string') {
+              locationName = eventSchema.location;
+            } else if (eventSchema.location.name) {
+              locationName = eventSchema.location.name;
+              // Try multiple address formats
+              locationAddress = eventSchema.location.address?.streetAddress ||
+                              eventSchema.location.address?.addressLocality ||
+                              (typeof eventSchema.location.address === 'string' ? eventSchema.location.address : '');
+            }
+          }
+
           eventData = {
-            title: jsonData.name || (titleMatch ? titleMatch[1] : ''),
-            startTime: jsonData.startDate,
-            endTime: jsonData.endDate,
+            title: eventSchema.name || (titleMatch ? titleMatch[1].replace(' | Luma', '').trim() : ''),
+            startTime: eventSchema.startDate || undefined,
+            endTime: eventSchema.endDate || undefined,
             location: {
-              name: jsonData.location?.name || '',
-              address: jsonData.location?.address?.streetAddress || '',
+              name: locationName,
+              address: locationAddress,
             },
-            description: jsonData.description || (descMatch ? descMatch[1] : ''),
+            description: eventSchema.description || (descMatch ? descMatch[1] : undefined),
           };
+
+          console.log('Parsed event data:', eventData); // Debug log
+          break; // Found event data, stop looking
         }
       } catch (e) {
-        // Fall through to Open Graph parsing
+        console.error('Failed to parse JSON-LD block:', e);
+        continue; // Try next JSON-LD block
       }
     }
 
     // Fallback to Open Graph data if JSON-LD parsing failed
     if (!eventData && titleMatch) {
-      // Try to extract location from page
+      // Try to extract location and times from various meta tags
       const locationMatch = html.match(/<meta\s+property="event:location"\s+content="([^"]+)"/i) ||
+                           html.match(/<meta\s+name="location"\s+content="([^"]+)"/i) ||
                            html.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</i);
 
+      const startTimeMatch = html.match(/<meta\s+property="event:start_time"\s+content="([^"]+)"/i) ||
+                            html.match(/<time[^>]*datetime="([^"]+)"/i);
+
+      const endTimeMatch = html.match(/<meta\s+property="event:end_time"\s+content="([^"]+)"/i);
+
       eventData = {
-        title: titleMatch[1],
+        title: titleMatch[1].replace(' | Luma', '').trim(),
+        startTime: startTimeMatch ? startTimeMatch[1] : undefined,
+        endTime: endTimeMatch ? endTimeMatch[1] : undefined,
         location: {
           name: locationMatch ? locationMatch[1] : '',
         },
         description: descMatch ? descMatch[1] : undefined,
       };
+
+      console.log('Fallback parsed event data:', eventData); // Debug log
     }
 
     return eventData;
