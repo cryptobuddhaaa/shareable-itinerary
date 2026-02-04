@@ -23,9 +23,8 @@ export const lumaService = {
   },
 
   /**
-   * Fetch event data from Luma URL
-   * Note: Due to CORS restrictions, this may not work directly from the browser.
-   * In production, you'd need a CORS proxy or server-side endpoint.
+   * Fetch event data from Luma URL via serverless proxy
+   * Uses the /api/fetch-luma endpoint to bypass CORS restrictions
    */
   async fetchEventData(lumaUrl: string): Promise<LumaEventData | null> {
     if (!this.isLumaUrl(lumaUrl)) {
@@ -33,24 +32,23 @@ export const lumaService = {
     }
 
     try {
-      // Attempt to fetch the page
-      // Note: This will likely fail due to CORS in browser
-      const response = await fetch(lumaUrl, {
+      // Use our serverless function as a CORS proxy
+      const apiUrl = `/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
+
+      const response = await fetch(apiUrl, {
         method: 'GET',
-        mode: 'cors',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch Luma event');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API error:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch Luma event');
       }
 
-      const html = await response.text();
-      return this.parseEventHtml(html);
+      const eventData = await response.json();
+      return eventData;
     } catch (error) {
       console.error('Error fetching Luma event:', error);
-
-      // Fallback: Try to extract event ID and use og:meta tags if available
-      // or return null to let user fill manually
       return null;
     }
   },
