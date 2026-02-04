@@ -98,7 +98,38 @@ function decodeHtmlEntities(text: string): string {
 
 function parseEventHtml(html: string): LumaEventData | null {
   try {
-    // Extract Open Graph meta tags
+    // PRIORITY 1: Extract Next.js data (most reliable source)
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"[^>]*type="application\/json">(.+?)<\/script>/s);
+
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1]);
+
+        // Try multiple paths where event data might be located
+        const event = nextData?.props?.pageProps?.initialData?.data?.event ||
+                     nextData?.props?.pageProps?.initialData?.event;
+
+        if (event) {
+          const locationInfo = event.geo_address_info || {};
+
+          return {
+            title: decodeHtmlEntities(event.name || '').replace(' | Luma', '').replace('· Luma', '').trim(),
+            startTime: event.start_at,
+            endTime: event.end_at,
+            location: {
+              name: decodeHtmlEntities(locationInfo.address || locationInfo.full_address || ''),
+              address: decodeHtmlEntities(locationInfo.full_address || ''),
+            },
+            description: undefined, // Description is in the mirror structure, can add if needed
+          };
+        }
+      } catch (e) {
+        console.error('Failed to parse Next.js data:', e);
+        // Fall through to other parsing methods
+      }
+    }
+
+    // PRIORITY 2: Extract Open Graph meta tags (fallback)
     const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
     const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
 
