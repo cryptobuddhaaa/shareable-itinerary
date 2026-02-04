@@ -68,6 +68,34 @@ interface LumaEventData {
   description?: string;
 }
 
+/**
+ * Decode HTML entities like &amp;, &lt;, &gt;, &quot;, etc.
+ */
+function decodeHtmlEntities(text: string): string {
+  const entities: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&apos;': "'",
+    '&nbsp;': ' ',
+  };
+
+  let decoded = text;
+
+  // Replace named entities
+  for (const [entity, char] of Object.entries(entities)) {
+    decoded = decoded.replace(new RegExp(entity, 'g'), char);
+  }
+
+  // Replace numeric entities (&#123; or &#x1A;)
+  decoded = decoded.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+  return decoded;
+}
+
 function parseEventHtml(html: string): LumaEventData | null {
   try {
     // Extract Open Graph meta tags
@@ -107,14 +135,14 @@ function parseEventHtml(html: string): LumaEventData | null {
           }
 
           eventData = {
-            title: eventSchema.name || (titleMatch ? titleMatch[1].replace(' | Luma', '').trim() : ''),
+            title: decodeHtmlEntities(eventSchema.name || (titleMatch ? titleMatch[1].replace(' | Luma', '').trim() : '')),
             startTime: eventSchema.startDate || undefined,
             endTime: eventSchema.endDate || undefined,
             location: {
-              name: locationName,
-              address: locationAddress,
+              name: decodeHtmlEntities(locationName),
+              address: decodeHtmlEntities(locationAddress),
             },
-            description: eventSchema.description || (descMatch ? descMatch[1] : undefined),
+            description: eventSchema.description ? decodeHtmlEntities(eventSchema.description) : (descMatch ? decodeHtmlEntities(descMatch[1]) : undefined),
           };
 
           console.log('Parsed event data:', eventData); // Debug log
@@ -139,13 +167,13 @@ function parseEventHtml(html: string): LumaEventData | null {
       const endTimeMatch = html.match(/<meta\s+property="event:end_time"\s+content="([^"]+)"/i);
 
       eventData = {
-        title: titleMatch[1].replace(' | Luma', '').trim(),
+        title: decodeHtmlEntities(titleMatch[1].replace(' | Luma', '').trim()),
         startTime: startTimeMatch ? startTimeMatch[1] : undefined,
         endTime: endTimeMatch ? endTimeMatch[1] : undefined,
         location: {
-          name: locationMatch ? locationMatch[1] : '',
+          name: locationMatch ? decodeHtmlEntities(locationMatch[1]) : '',
         },
-        description: descMatch ? descMatch[1] : undefined,
+        description: descMatch ? decodeHtmlEntities(descMatch[1]) : undefined,
       };
 
       console.log('Fallback parsed event data:', eventData); // Debug log
