@@ -156,24 +156,59 @@ function parseEventHtml(html: string): LumaEventData | null {
 
     // Fallback to Open Graph data if JSON-LD parsing failed
     if (!eventData && titleMatch) {
-      // Try to extract location and times from various meta tags
-      const locationMatch = html.match(/<meta\s+property="event:location"\s+content="([^"]+)"/i) ||
-                           html.match(/<meta\s+name="location"\s+content="([^"]+)"/i) ||
-                           html.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</i);
+      const title = decodeHtmlEntities(titleMatch[1].replace(' | Luma', '').replace('· Luma', '').trim());
+      const description = descMatch ? decodeHtmlEntities(descMatch[1]) : '';
 
-      const startTimeMatch = html.match(/<meta\s+property="event:start_time"\s+content="([^"]+)"/i) ||
-                            html.match(/<time[^>]*datetime="([^"]+)"/i);
+      // Parse description for date, time, and location
+      // Format: "Date: Feb 9th, 2026, 8:00 AM — 5:30 PM\nLocation: Hong Kong, JW Marriot Hotel"
+      let startTime: string | undefined;
+      let endTime: string | undefined;
+      let locationName = '';
 
-      const endTimeMatch = html.match(/<meta\s+property="event:end_time"\s+content="([^"]+)"/i);
+      if (description) {
+        // Extract date and time
+        // Match patterns like "Feb 9th, 2026, 8:00 AM — 5:30 PM" or "Feb 9, 2026, 8:00 AM - 5:30 PM"
+        const dateTimeMatch = description.match(/Date:\s*([^,]+,\s*\d{4}),\s*(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))\s*[—\-–]\s*(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/i);
+
+        if (dateTimeMatch) {
+          const datePart = dateTimeMatch[1].trim(); // "Feb 9th, 2026"
+          const startTimePart = dateTimeMatch[2].trim(); // "8:00 AM"
+          const endTimePart = dateTimeMatch[3].trim(); // "5:30 PM"
+
+          // Parse date (convert "Feb 9th, 2026" to "Feb 9, 2026")
+          const cleanDate = datePart.replace(/(\d+)(st|nd|rd|th)/, '$1');
+
+          // Create ISO datetime strings
+          try {
+            const startDateTime = new Date(`${cleanDate} ${startTimePart}`);
+            const endDateTime = new Date(`${cleanDate} ${endTimePart}`);
+
+            if (!isNaN(startDateTime.getTime())) {
+              startTime = startDateTime.toISOString();
+            }
+            if (!isNaN(endDateTime.getTime())) {
+              endTime = endDateTime.toISOString();
+            }
+          } catch (e) {
+            console.error('Failed to parse date/time:', e);
+          }
+        }
+
+        // Extract location - match "Location: <location name>"
+        const locationMatch = description.match(/Location:\s*([^\n]+)/i);
+        if (locationMatch) {
+          locationName = locationMatch[1].trim();
+        }
+      }
 
       eventData = {
-        title: decodeHtmlEntities(titleMatch[1].replace(' | Luma', '').trim()),
-        startTime: startTimeMatch ? startTimeMatch[1] : undefined,
-        endTime: endTimeMatch ? endTimeMatch[1] : undefined,
+        title,
+        startTime,
+        endTime,
         location: {
-          name: locationMatch ? decodeHtmlEntities(locationMatch[1]) : '',
+          name: locationName,
         },
-        description: descMatch ? decodeHtmlEntities(descMatch[1]) : undefined,
+        description,
       };
 
       console.log('Fallback parsed event data:', eventData); // Debug log
