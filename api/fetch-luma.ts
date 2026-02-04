@@ -111,14 +111,38 @@ function parseEventHtml(html: string): LumaEventData | null {
 
         if (event) {
           const locationInfo = event.geo_address_info || {};
+          const isLocationHidden = locationInfo.mode === 'obfuscated' ||
+                                  event.geo_address_visibility === 'guests-only';
+
+          let locationName = '';
+          let locationAddress = '';
+
+          if (isLocationHidden) {
+            // Location is hidden - use approximate area if available
+            const cityState = locationInfo.city_state || locationInfo.city || '';
+            const region = locationInfo.region || '';
+
+            if (cityState || region) {
+              locationName = `${cityState || region} (exact location hidden - guests only)`;
+            } else if (event.coordinate) {
+              // Use coordinates as fallback
+              locationName = `${event.coordinate.latitude}, ${event.coordinate.longitude} (approximate location)`;
+            } else {
+              locationName = 'Location hidden (guests only)';
+            }
+          } else {
+            // Location is visible - use full address
+            locationName = decodeHtmlEntities(locationInfo.address || locationInfo.full_address || '');
+            locationAddress = decodeHtmlEntities(locationInfo.full_address || '');
+          }
 
           return {
             title: decodeHtmlEntities(event.name || '').replace(' | Luma', '').replace('· Luma', '').trim(),
             startTime: event.start_at,
             endTime: event.end_at,
             location: {
-              name: decodeHtmlEntities(locationInfo.address || locationInfo.full_address || ''),
-              address: decodeHtmlEntities(locationInfo.full_address || ''),
+              name: locationName,
+              address: locationAddress,
             },
             description: undefined, // Description is in the mirror structure, can add if needed
           };
