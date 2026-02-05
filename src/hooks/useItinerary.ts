@@ -210,6 +210,61 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
     const currentItinerary = state.itineraries.find((it) => it.id === currentId);
     if (!currentItinerary) return;
 
+    // If updating dates, validate that existing events fall within new date range
+    if ((updates.startDate || updates.endDate) && currentItinerary) {
+      const newStartDate = updates.startDate || currentItinerary.startDate;
+      const newEndDate = updates.endDate || currentItinerary.endDate;
+
+      // Find all events across all days
+      const allEvents: { date: string; title: string }[] = [];
+      currentItinerary.days.forEach((day) => {
+        day.events.forEach((event) => {
+          allEvents.push({ date: day.date, title: event.title });
+        });
+      });
+
+      // Check if any events fall outside the new date range
+      const eventsOutsideRange = allEvents.filter((event) => {
+        const eventDate = new Date(event.date);
+        const startDate = new Date(newStartDate);
+        const endDate = new Date(newEndDate);
+        return eventDate < startDate || eventDate > endDate;
+      });
+
+      if (eventsOutsideRange.length > 0) {
+        const eventsList = eventsOutsideRange
+          .map((e) => `- ${e.title} (${new Date(e.date).toLocaleDateString()})`)
+          .join('\n');
+
+        throw new Error(
+          `DATE_CONFLICT:Cannot change date range. You have ${eventsOutsideRange.length} event(s) outside the new date range:\n\n${eventsList}\n\nPlease edit or delete these events first before changing the itinerary dates.`
+        );
+      }
+
+      // Regenerate days array for the new date range
+      const days: ItineraryDay[] = [];
+      const start = new Date(newStartDate);
+      const end = new Date(newEndDate);
+      let dayNumber = 1;
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        // Find existing day data if it exists
+        const existingDay = currentItinerary.days.find((day) => day.date === dateStr);
+
+        days.push({
+          date: dateStr,
+          dayNumber,
+          events: existingDay?.events || [],
+          checklist: existingDay?.checklist || [],
+          goals: existingDay?.goals || [],
+        });
+        dayNumber++;
+      }
+
+      updates.days = days;
+    }
+
     const updatedItinerary = {
       ...currentItinerary,
       ...updates,
