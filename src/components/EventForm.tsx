@@ -221,6 +221,8 @@ export default function EventForm({ day, onClose }: EventFormProps) {
               <option value="travel">Travel</option>
               <option value="buffer">Buffer</option>
               <option value="accommodation">Accommodation</option>
+              <option value="side-event">Side Event</option>
+              <option value="main-conference">Main Conference</option>
             </select>
           </div>
 

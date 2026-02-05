@@ -9,7 +9,7 @@ export interface Location {
   placeId?: string;
 }
 
-export type EventType = 'meeting' | 'travel' | 'meal' | 'buffer' | 'accommodation' | 'activity';
+export type EventType = 'meeting' | 'travel' | 'meal' | 'buffer' | 'accommodation' | 'activity' | 'side-event' | 'main-conference';
 export type TransitMethod = 'walk' | 'mtr' | 'taxi' | 'bus' | 'airport-express' | 'flight' | 'other';
 
 export interface ChecklistItem {

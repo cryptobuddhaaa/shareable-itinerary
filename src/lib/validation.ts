@@ -72,7 +72,7 @@ export const CreateEventSchema = z.object({
     .max(500, 'Location address must be less than 500 characters')
     .optional()
     .transform((val) => val ? sanitizeText(val) : ''),
-  eventType: z.enum(['meeting', 'travel', 'meal', 'buffer', 'accommodation', 'activity']),
+  eventType: z.enum(['meeting', 'travel', 'meal', 'buffer', 'accommodation', 'activity', 'side-event', 'main-conference']),
   description: z.string()
     .max(1000, 'Description must be less than 1000 characters')
     .optional()
