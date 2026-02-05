@@ -118,9 +118,10 @@ export const shareService = {
             start_date,
             end_date,
             data,
+            created_by_name,
+            created_by_email,
             created_at,
-            updated_at,
-            users!inner(email, raw_user_meta_data)
+            updated_at
           `)
           .eq('id', sharedLink.itinerary_id)
           .single();
@@ -130,16 +131,13 @@ export const shareService = {
           return null;
         }
 
-        // Increment view count
-        await supabase
+        // Increment view count (non-blocking, don't wait for it)
+        supabase
           .from('shared_itineraries')
           .update({ view_count: supabase.rpc('increment', { row_id: shareId }) })
-          .eq('id', shareId);
-
-        // Extract user data (TypeScript doesn't know the structure)
-        const userData = itineraryData.users as any;
-        const userMetadata = userData?.raw_user_meta_data || {};
-        const userEmail = userData?.email;
+          .eq('id', shareId)
+          .then(() => {})
+          .catch(() => {});
 
         // Transform database format to app format
         const itinerary: Itinerary = {
@@ -150,8 +148,8 @@ export const shareService = {
           endDate: itineraryData.end_date,
           days: itineraryData.data.days || [],
           transitSegments: itineraryData.data.transitSegments || [],
-          createdByName: userMetadata?.full_name || userEmail?.split('@')[0] || 'Unknown',
-          createdByEmail: userEmail,
+          createdByName: itineraryData.created_by_name || 'Unknown',
+          createdByEmail: itineraryData.created_by_email,
           createdAt: itineraryData.created_at,
           updatedAt: itineraryData.updated_at,
         };

@@ -44,11 +44,6 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
   initialize: async (userId: string) => {
     set({ loading: true });
     try {
-      // Get user info for creator name
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       const { data, error } = await supabase
         .from('itineraries')
         .select('*')
@@ -65,8 +60,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
         endDate: row.end_date,
         location: row.location,
         ...row.data,
-        createdByName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Unknown',
-        createdByEmail: user?.email,
+        createdByName: row.created_by_name || 'Unknown',
+        createdByEmail: row.created_by_email,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
@@ -116,6 +111,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
         end_date: endDate,
         location,
         data: { days, transitSegments: [] },
+        created_by_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Unknown',
+        created_by_email: user.email,
       })
       .select()
       .single();
