@@ -79,6 +79,12 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
   },
 
   createItinerary: async (title, startDate, endDate, location) => {
+    // Check itinerary limit (max 10 per user)
+    const currentItineraries = get().itineraries;
+    if (currentItineraries.length >= 10) {
+      throw new Error('LIMIT_REACHED:You have reached the maximum limit of 10 itineraries. Please delete an existing itinerary before creating a new one.');
+    }
+
     // Generate days between start and end date
     const days: ItineraryDay[] = [];
     const start = new Date(startDate);
@@ -281,6 +287,15 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
     const state = get();
     const currentId = state.currentItineraryId;
     if (!currentId) return;
+
+    // Check event limit (max 20 events per itinerary)
+    const currentItinerary = state.itineraries.find((it) => it.id === currentId);
+    if (currentItinerary) {
+      const totalEvents = currentItinerary.days.reduce((sum, day) => sum + day.events.length, 0);
+      if (totalEvents >= 20) {
+        throw new Error('LIMIT_REACHED:You have reached the maximum limit of 20 events for this itinerary. Please delete an existing event before adding a new one.');
+      }
+    }
 
     set((state) => {
       const updatedItineraries = state.itineraries.map((it) =>

@@ -98,7 +98,7 @@ export default function EventForm({ day, onClose }: EventFormProps) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !startTime || !endTime || !locationName) return;
 
@@ -131,8 +131,17 @@ export default function EventForm({ day, onClose }: EventFormProps) {
       notes: [],
     };
 
-    addEvent(day.date, event);
-    onClose();
+    try {
+      await addEvent(day.date, event);
+      onClose();
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('LIMIT_REACHED:')) {
+        const message = error.message.replace('LIMIT_REACHED:', '');
+        setLumaError(message);
+      } else if (error instanceof Error) {
+        setLumaError(error.message);
+      }
+    }
   };
 
   return (

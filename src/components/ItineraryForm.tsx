@@ -11,7 +11,7 @@ export default function ItineraryForm() {
   const [location, setLocation] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
@@ -24,7 +24,7 @@ export default function ItineraryForm() {
         location,
       });
 
-      createItinerary(validated.title, validated.startDate, validated.endDate, validated.location);
+      await createItinerary(validated.title, validated.startDate, validated.endDate, validated.location);
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
@@ -33,6 +33,11 @@ export default function ItineraryForm() {
           fieldErrors[field] = err.message;
         });
         setErrors(fieldErrors);
+      } else if (error instanceof Error && error.message.startsWith('LIMIT_REACHED:')) {
+        const message = error.message.replace('LIMIT_REACHED:', '');
+        setErrors({ form: message });
+      } else if (error instanceof Error) {
+        setErrors({ form: error.message });
       }
     }
   };
@@ -40,6 +45,11 @@ export default function ItineraryForm() {
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <h2 className="text-2xl font-semibold text-gray-900 mb-6">Create New Itinerary</h2>
+      {errors.form && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-sm text-red-700">{errors.form}</p>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700">
