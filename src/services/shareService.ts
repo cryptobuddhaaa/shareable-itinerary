@@ -1,6 +1,7 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { supabase } from '../lib/supabase';
 import type { Itinerary } from '../models/types';
+import { ShareIdSchema, CompressedDataSchema } from '../lib/validation';
 
 export const shareService = {
   /**
@@ -26,12 +27,13 @@ export const shareService = {
   },
 
   /**
-   * Generate a short random share ID
+   * Generate a secure random share ID (12 characters for better security)
+   * 12 chars = 36^12 = 4.7 × 10^18 combinations (much harder to guess)
    */
   generateShareId(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
@@ -93,9 +95,12 @@ export const shareService = {
     const params = new URLSearchParams(window.location.search);
 
     // Check for new share link format first
-    const shareId = params.get('share');
-    if (shareId) {
+    const shareIdRaw = params.get('share');
+    if (shareIdRaw) {
       try {
+        // Validate share ID format (prevents injection and DoS)
+        const shareId = ShareIdSchema.parse(shareIdRaw);
+
         // Fetch the shared itinerary from database
         const { data: sharedLink, error: shareError } = await supabase
           .from('shared_itineraries')
@@ -157,10 +162,12 @@ export const shareService = {
     }
 
     // Fall back to legacy compressed URL format
-    const data = params.get('data');
-    if (!data) return null;
+    const dataRaw = params.get('data');
+    if (!dataRaw) return null;
 
     try {
+      // Validate compressed data size (prevents DoS)
+      const data = CompressedDataSchema.parse(dataRaw);
       return this.decompressItinerary(data);
     } catch (error) {
       console.error('Failed to load itinerary from URL:', error);

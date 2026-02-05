@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
+import { CreateItinerarySchema } from '../lib/validation';
+import { z } from 'zod';
 
 export default function ItineraryForm() {
   const { createItinerary } = useItinerary();
@@ -7,12 +9,32 @@ export default function ItineraryForm() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [location, setLocation] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !startDate || !endDate || !location) return;
+    setErrors({});
 
-    createItinerary(title, startDate, endDate, location);
+    try {
+      // Validate and sanitize inputs
+      const validated = CreateItinerarySchema.parse({
+        title,
+        startDate,
+        endDate,
+        location,
+      });
+
+      createItinerary(validated.title, validated.startDate, validated.endDate, validated.location);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          const field = err.path[0] as string;
+          fieldErrors[field] = err.message;
+        });
+        setErrors(fieldErrors);
+      }
+    }
   };
 
   return (
@@ -29,9 +51,15 @@ export default function ItineraryForm() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g., Hong Kong Business Trip"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
+            maxLength={200}
+            className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 sm:text-sm px-3 py-2 border ${
+              errors.title ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+            }`}
             required
           />
+          {errors.title && (
+            <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+          )}
         </div>
 
         <div>
@@ -44,9 +72,15 @@ export default function ItineraryForm() {
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="e.g., Hong Kong"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
+            maxLength={500}
+            className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 sm:text-sm px-3 py-2 border ${
+              errors.location ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+            }`}
             required
           />
+          {errors.location && (
+            <p className="mt-1 text-sm text-red-600">{errors.location}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -59,9 +93,14 @@ export default function ItineraryForm() {
               id="startDate"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
+              className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 sm:text-sm px-3 py-2 border ${
+                errors.startDate ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+              }`}
               required
             />
+            {errors.startDate && (
+              <p className="mt-1 text-sm text-red-600">{errors.startDate}</p>
+            )}
           </div>
 
           <div>
@@ -74,9 +113,14 @@ export default function ItineraryForm() {
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               min={startDate}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
+              className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 sm:text-sm px-3 py-2 border ${
+                errors.endDate ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+              }`}
               required
             />
+            {errors.endDate && (
+              <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>
+            )}
           </div>
         </div>
 

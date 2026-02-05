@@ -62,7 +62,8 @@ CREATE POLICY "Users can update their own share links"
     )
   );
 
--- Function to generate a short random ID
+-- Function to generate a secure random ID (12 characters for better security)
+-- 12 chars = 36^12 = 4.7 × 10^18 combinations (much harder to guess than 8 chars)
 CREATE OR REPLACE FUNCTION generate_share_id()
 RETURNS TEXT AS $$
 DECLARE
@@ -70,7 +71,7 @@ DECLARE
   result TEXT := '';
   i INTEGER;
 BEGIN
-  FOR i IN 1..8 LOOP
+  FOR i IN 1..12 LOOP
     result := result || substr(chars, floor(random() * length(chars) + 1)::integer, 1);
   END LOOP;
   RETURN result;
