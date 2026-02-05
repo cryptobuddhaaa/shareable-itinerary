@@ -20,6 +20,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [addingContactFor, setAddingContactFor] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [contactsExpanded, setContactsExpanded] = useState(true);
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
@@ -257,13 +258,28 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
 
       {!readOnly && (
         <div className="bg-white shadow rounded-lg p-6 mt-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-gray-900">Contacts from this Trip</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              People you've met at events in this itinerary
-            </p>
-          </div>
-          <ContactsList itineraryId={itinerary.id} />
+          <button
+            onClick={() => setContactsExpanded(!contactsExpanded)}
+            className="w-full flex items-center justify-between mb-4 hover:bg-gray-50 p-2 rounded-lg transition-colors"
+          >
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 text-left">Contacts from this Trip</h3>
+              <p className="text-sm text-gray-600 mt-1 text-left">
+                People you've met at events in this itinerary
+              </p>
+            </div>
+            <svg
+              className={`w-5 h-5 text-gray-600 transition-transform duration-200 flex-shrink-0 ml-4 ${
+                contactsExpanded ? 'transform rotate-180' : ''
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {contactsExpanded && <ContactsList itineraryId={itinerary.id} />}
         </div>
       )}
 
