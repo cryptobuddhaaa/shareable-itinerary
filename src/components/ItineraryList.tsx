@@ -8,6 +8,7 @@ export default function ItineraryList() {
   const { itineraries, currentItineraryId, selectItinerary, deleteItinerary } = useItinerary();
   const [shareItinerary, setShareItinerary] = useState<Itinerary | null>(null);
   const [editItinerary, setEditItinerary] = useState<Itinerary | null>(null);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   if (itineraries.length === 0) {
     return null;
@@ -24,8 +25,24 @@ export default function ItineraryList() {
 
   return (
     <div className="bg-white shadow rounded-lg p-6 mb-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">My Itineraries</h2>
-      <div className="space-y-2">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between mb-4 hover:bg-gray-50 p-2 rounded-lg transition-colors"
+      >
+        <h2 className="text-lg font-semibold text-gray-900">My Itineraries</h2>
+        <svg
+          className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${
+            isExpanded ? 'transform rotate-180' : ''
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isExpanded && (
+        <div className="space-y-2">
         {itineraries.map((itinerary) => {
           const isActive = itinerary.id === currentItineraryId;
           return (
@@ -92,7 +109,8 @@ export default function ItineraryList() {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {shareItinerary && (
         <ShareDialog

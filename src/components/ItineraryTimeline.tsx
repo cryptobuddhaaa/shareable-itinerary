@@ -19,6 +19,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [addingContactFor, setAddingContactFor] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
@@ -39,6 +40,18 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
+    });
+  };
+
+  const toggleDayExpansion = (date: string) => {
+    setExpandedDays((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
     });
   };
 
@@ -92,17 +105,37 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         </div>
       </div>
 
-      {itinerary.days.map((day) => (
-        <div key={day.date} className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">
-                Day {day.dayNumber}: {formatDate(day.date)}
-              </h3>
-              {day.goals.length > 0 && (
-                <p className="text-sm text-gray-600 mt-1">Goals: {day.goals.join(', ')}</p>
-              )}
-            </div>
+      {itinerary.days.map((day) => {
+        const isExpanded = expandedDays.has(day.date);
+        return (
+          <div key={day.date} className="bg-white shadow rounded-lg p-6 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <button
+                onClick={() => toggleDayExpansion(day.date)}
+                className="flex-1 text-left flex items-center gap-2 hover:bg-gray-50 p-2 -ml-2 rounded-lg transition-colors"
+              >
+                <svg
+                  className={`w-5 h-5 text-gray-600 transition-transform duration-200 flex-shrink-0 ${
+                    isExpanded ? 'transform rotate-180' : ''
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Day {day.dayNumber}: {formatDate(day.date)}
+                  </h3>
+                  {day.goals.length > 0 && (
+                    <p className="text-sm text-gray-600 mt-1">Goals: {day.goals.join(', ')}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {day.events.length} event{day.events.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </button>
             {!readOnly && (
               <button
                 onClick={() => {
@@ -119,10 +152,12 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
             )}
           </div>
 
-          {day.events.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No events scheduled for this day</p>
-          ) : (
-            <div className="space-y-4">
+          {isExpanded && (
+            <>
+              {day.events.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No events scheduled for this day</p>
+              ) : (
+                <div className="space-y-4">
               {day.events.map((event) => (
                 <div key={event.id} className="border-l-4 border-blue-500 pl-4 py-2">
                   <div className="flex justify-between items-start">
@@ -212,10 +247,13 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                   </div>
                 </div>
               ))}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {!readOnly && (
         <div className="bg-white shadow rounded-lg p-6 mt-6">
