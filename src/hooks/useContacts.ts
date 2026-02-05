@@ -21,8 +21,10 @@ interface ContactsState {
     firstName: string;
     lastName: string;
     projectCompany?: string;
+    position?: string;
     telegramHandle?: string;
     email?: string;
+    notes?: string;
   }) => Promise<void>;
   updateContact: (contactId: string, updates: Partial<Contact>) => Promise<void>;
   deleteContact: (contactId: string) => Promise<void>;
@@ -64,8 +66,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
         firstName: row.first_name,
         lastName: row.last_name,
         projectCompany: row.project_company,
+        position: row.position,
         telegramHandle: row.telegram_handle,
         email: row.email,
+        notes: row.notes,
         eventTitle: row.event_title,
         dateMet: row.date_met,
         createdAt: row.created_at,
@@ -104,8 +108,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
           first_name: contactData.firstName,
           last_name: contactData.lastName,
           project_company: contactData.projectCompany,
+          position: contactData.position,
           telegram_handle: contactData.telegramHandle,
           email: contactData.email,
+          notes: contactData.notes,
           event_title: contactData.eventTitle,
           date_met: contactData.dateMet,
         })
@@ -122,8 +128,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
         firstName: data.first_name,
         lastName: data.last_name,
         projectCompany: data.project_company,
+        position: data.position,
         telegramHandle: data.telegram_handle,
         email: data.email,
+        notes: data.notes,
         eventTitle: data.event_title,
         dateMet: data.date_met,
         createdAt: data.created_at,
@@ -148,8 +156,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       if (updates.firstName !== undefined) updateData.first_name = updates.firstName;
       if (updates.lastName !== undefined) updateData.last_name = updates.lastName;
       if (updates.projectCompany !== undefined) updateData.project_company = updates.projectCompany;
+      if (updates.position !== undefined) updateData.position = updates.position;
       if (updates.telegramHandle !== undefined) updateData.telegram_handle = updates.telegramHandle;
       if (updates.email !== undefined) updateData.email = updates.email;
+      if (updates.notes !== undefined) updateData.notes = updates.notes;
 
       const { data, error } = await supabase
         .from('contacts')
@@ -168,8 +178,10 @@ export const useContacts = create<ContactsState>()((set, get) => ({
         firstName: data.first_name,
         lastName: data.last_name,
         projectCompany: data.project_company,
+        position: data.position,
         telegramHandle: data.telegram_handle,
         email: data.email,
+        notes: data.notes,
         eventTitle: data.event_title,
         dateMet: data.date_met,
         createdAt: data.created_at,

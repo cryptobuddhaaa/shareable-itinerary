@@ -80,8 +80,10 @@ export interface Contact {
   firstName: string;
   lastName: string;
   projectCompany?: string;
+  position?: string;
   telegramHandle?: string;
   email?: string;
+  notes?: string;
   eventTitle: string; // Denormalized from event for easier display
   dateMet: string; // ISO8601 date
   createdAt: string; // ISO8601 datetime

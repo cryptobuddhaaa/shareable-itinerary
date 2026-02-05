@@ -158,6 +158,10 @@ export const CreateContactSchema = z.object({
     .max(200, 'Project/Company must be less than 200 characters')
     .optional()
     .transform((val) => val ? sanitizeText(val) : undefined),
+  position: z.string()
+    .max(200, 'Position must be less than 200 characters')
+    .optional()
+    .transform((val) => val ? sanitizeText(val) : undefined),
   telegramHandle: z.string()
     .max(100, 'Telegram handle must be less than 100 characters')
     .optional()
@@ -168,4 +172,8 @@ export const CreateContactSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform((val) => val && val !== '' ? sanitizeText(val) : undefined),
+  notes: z.string()
+    .max(100, 'Notes must be less than 100 characters')
+    .optional()
+    .transform((val) => val ? sanitizeText(val) : undefined),
 });

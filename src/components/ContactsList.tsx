@@ -75,6 +75,9 @@ export default function ContactsList({ itineraryId }: ContactsListProps) {
                 {contact.projectCompany && (
                   <p className="text-sm text-gray-600 mt-1">{contact.projectCompany}</p>
                 )}
+                {contact.position && (
+                  <p className="text-sm text-gray-500 mt-0.5">{contact.position}</p>
+                )}
               </div>
               <div className="flex gap-1">
                 <button
@@ -138,6 +141,12 @@ export default function ContactsList({ itineraryId }: ContactsListProps) {
                   <a href={`mailto:${contact.email}`} className="hover:underline text-blue-600">
                     {contact.email}
                   </a>
+                </div>
+              )}
+
+              {contact.notes && (
+                <div className="mt-2 text-sm text-gray-600 italic">
+                  "{contact.notes}"
                 </div>
               )}
             </div>

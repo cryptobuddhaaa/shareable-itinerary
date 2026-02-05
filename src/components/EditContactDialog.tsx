@@ -14,8 +14,10 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
   const [firstName, setFirstName] = useState(contact.firstName);
   const [lastName, setLastName] = useState(contact.lastName);
   const [projectCompany, setProjectCompany] = useState(contact.projectCompany || '');
+  const [position, setPosition] = useState(contact.position || '');
   const [telegramHandle, setTelegramHandle] = useState(contact.telegramHandle || '');
   const [email, setEmail] = useState(contact.email || '');
+  const [notes, setNotes] = useState(contact.notes || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -39,16 +41,20 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
         firstName,
         lastName,
         projectCompany: projectCompany || undefined,
+        position: position || undefined,
         telegramHandle: telegramHandle || undefined,
         email: email || undefined,
+        notes: notes || undefined,
       });
 
       await updateContact(contact.id, {
         firstName: validated.firstName,
         lastName: validated.lastName,
         projectCompany: validated.projectCompany,
+        position: validated.position,
         telegramHandle: validated.telegramHandle,
         email: validated.email,
+        notes: validated.notes,
       });
 
       onClose();
@@ -135,21 +141,40 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
               </div>
             </div>
 
-            <div>
-              <label htmlFor="projectCompany" className="block text-sm font-medium text-gray-700 mb-1">
-                Project/Company
-              </label>
-              <input
-                type="text"
-                id="projectCompany"
-                value={projectCompany}
-                onChange={(e) => setProjectCompany(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.projectCompany ? 'border-red-500' : 'border-gray-300'
-                }`}
-                disabled={isSubmitting}
-              />
-              {errors.projectCompany && <p className="mt-1 text-sm text-red-600">{errors.projectCompany}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="projectCompany" className="block text-sm font-medium text-gray-700 mb-1">
+                  Project/Company
+                </label>
+                <input
+                  type="text"
+                  id="projectCompany"
+                  value={projectCompany}
+                  onChange={(e) => setProjectCompany(e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.projectCompany ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={isSubmitting}
+                />
+                {errors.projectCompany && <p className="mt-1 text-sm text-red-600">{errors.projectCompany}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1">
+                  Position
+                </label>
+                <input
+                  type="text"
+                  id="position"
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.position ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  disabled={isSubmitting}
+                />
+                {errors.position && <p className="mt-1 text-sm text-red-600">{errors.position}</p>}
+              </div>
             </div>
 
             <div>
@@ -188,6 +213,26 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
                 disabled={isSubmitting}
               />
               {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                Notes
+                <span className="text-gray-500 text-xs ml-1">({notes.length}/100)</span>
+              </label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                maxLength={100}
+                rows={2}
+                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.notes ? 'border-red-500' : 'border-gray-300'
+                }`}
+                disabled={isSubmitting}
+                placeholder="Any additional notes about this contact..."
+              />
+              {errors.notes && <p className="mt-1 text-sm text-red-600">{errors.notes}</p>}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
