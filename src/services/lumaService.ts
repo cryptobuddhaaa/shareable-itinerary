@@ -40,6 +40,12 @@ export const lumaService = {
       });
 
       if (!response.ok) {
+        // Check if we're getting HTML/TS source (API not available in dev mode)
+        const contentType = response.headers.get('content-type');
+        if (contentType?.includes('text/html') || contentType?.includes('typescript')) {
+          throw new Error('DEV_MODE_NO_API');
+        }
+
         const errorData = await response.json().catch(() => ({}));
         console.error('API error:', errorData);
         throw new Error(errorData.error || 'Failed to fetch Luma event');
@@ -49,6 +55,16 @@ export const lumaService = {
       return eventData;
     } catch (error) {
       console.error('Error fetching Luma event:', error);
+
+      // Check if it's a JSON parsing error (getting non-JSON response)
+      if (error instanceof SyntaxError) {
+        throw new Error('DEV_MODE_NO_API');
+      }
+
+      if (error instanceof Error) {
+        throw error;
+      }
+
       return null;
     }
   },

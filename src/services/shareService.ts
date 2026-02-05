@@ -1,4 +1,4 @@
-import { compress, decompress } from 'lz-string';
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import type { Itinerary } from '../models/types';
 
 export const shareService = {
@@ -7,7 +7,7 @@ export const shareService = {
    */
   compressItinerary(itinerary: Itinerary): string {
     const json = JSON.stringify(itinerary);
-    return compress(json);
+    return compressToEncodedURIComponent(json);
   },
 
   /**
@@ -15,7 +15,7 @@ export const shareService = {
    */
   decompressItinerary(compressed: string): Itinerary | null {
     try {
-      const json = decompress(compressed);
+      const json = decompressFromEncodedURIComponent(compressed);
       if (!json) return null;
       return JSON.parse(json) as Itinerary;
     } catch (error) {
@@ -30,7 +30,8 @@ export const shareService = {
   generateShareUrl(itinerary: Itinerary): string {
     const compressed = this.compressItinerary(itinerary);
     const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?data=${encodeURIComponent(compressed)}`;
+    // No need for encodeURIComponent since compressToEncodedURIComponent already handles it
+    return `${baseUrl}?data=${compressed}`;
   },
 
   /**
@@ -42,8 +43,8 @@ export const shareService = {
     if (!data) return null;
 
     try {
-      const decoded = decodeURIComponent(data);
-      return this.decompressItinerary(decoded);
+      // No need for decodeURIComponent since decompressFromEncodedURIComponent handles it
+      return this.decompressItinerary(data);
     } catch (error) {
       console.error('Failed to load itinerary from URL:', error);
       return null;

@@ -1,26 +1,49 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from './hooks/useAuth';
 import { useItinerary } from './hooks/useItinerary';
 import { shareService } from './services/shareService';
+import Login from './components/Login';
 import ItineraryForm from './components/ItineraryForm';
 import ItineraryList from './components/ItineraryList';
 import ItineraryTimeline from './components/ItineraryTimeline';
 import ShareDialog from './components/ShareDialog';
 
 function App() {
-  const { currentItinerary, itineraries, currentItineraryId, loadItinerary } = useItinerary();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const { currentItinerary, itineraries, initialize, initialized, reset, loadItinerary } = useItinerary();
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [prevItineraryCount, setPrevItineraryCount] = useState(itineraries.length);
+  const [sharedItinerary, setSharedItinerary] = useState<any>(null);
 
   const itinerary = currentItinerary();
 
+  // Check for shared itinerary in URL on mount
   useEffect(() => {
-    // Load itinerary from URL if present
     const urlItinerary = shareService.loadFromUrl();
     if (urlItinerary) {
-      loadItinerary(urlItinerary);
+      setSharedItinerary(urlItinerary);
     }
-  }, [loadItinerary]);
+  }, []);
+
+  // Initialize itineraries when user logs in
+  useEffect(() => {
+    if (user && !initialized) {
+      initialize(user.id);
+    } else if (!user && initialized) {
+      reset();
+    }
+  }, [user, initialized, initialize, reset]);
+
+  // Load itinerary from URL if present
+  useEffect(() => {
+    if (user && initialized) {
+      const urlItinerary = shareService.loadFromUrl();
+      if (urlItinerary) {
+        loadItinerary(urlItinerary);
+      }
+    }
+  }, [user, initialized, loadItinerary]);
 
   // Close create form when a new itinerary is created
   useEffect(() => {
@@ -29,6 +52,56 @@ function App() {
     }
     setPrevItineraryCount(itineraries.length);
   }, [itineraries.length, prevItineraryCount, showCreateForm]);
+
+  // Show loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If there's a shared itinerary in the URL, show it without requiring login
+  if (sharedItinerary && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Shared Itinerary</h1>
+                <p className="text-sm text-gray-600 mt-1">{sharedItinerary.title}</p>
+              </div>
+              <a
+                href={window.location.origin + window.location.pathname}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Create Your Own Itinerary
+              </a>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-blue-900">
+              📌 You're viewing a shared itinerary. <a href={window.location.origin + window.location.pathname} className="underline font-medium">Sign in with Google</a> to create and save your own itineraries!
+            </p>
+          </div>
+          <ItineraryTimeline sharedItinerary={sharedItinerary} readOnly={true} />
+        </main>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated and no shared itinerary
+  if (!user) {
+    return <Login />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -39,17 +112,41 @@ function App() {
               <h1 className="text-3xl font-bold text-gray-900">Itinerary Builder</h1>
               <p className="text-sm text-gray-600 mt-1">Plan and share your trips</p>
             </div>
-            {itinerary && (
-              <button
-                onClick={() => setShowShareDialog(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                Share
-              </button>
-            )}
+            <div className="flex items-center gap-4">
+              {itinerary && (
+                <button
+                  onClick={() => setShowShareDialog(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share
+                </button>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">{user?.user_metadata?.full_name || user?.email}</p>
+                  <p className="text-xs text-gray-500">{user?.email}</p>
+                </div>
+                {user?.user_metadata?.avatar_url && (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="Profile"
+                    className="w-10 h-10 rounded-full"
+                  />
+                )}
+                <button
+                  onClick={signOut}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  title="Sign out"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>

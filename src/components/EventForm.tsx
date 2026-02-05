@@ -56,7 +56,13 @@ export default function EventForm({ day, onClose }: EventFormProps) {
       }
     } catch (error) {
       console.error('Luma fetch error:', error);
-      setLumaError('Failed to fetch event data. Please fill in details manually.');
+
+      // Check if it's the dev mode API unavailability error
+      if (error instanceof Error && error.message === 'DEV_MODE_NO_API') {
+        setLumaError('⚠️ Luma auto-fetch only works when deployed to Vercel. For now, please fill in details manually or run "vercel dev" instead of "npm run dev".');
+      } else {
+        setLumaError('Failed to fetch event data. Please fill in details manually.');
+      }
     } finally {
       setIsLoadingLuma(false);
     }
