@@ -21,6 +21,7 @@ export default function EventForm({ day, onClose }: EventFormProps) {
   const [goals, setGoals] = useState('');
   const [isLoadingLuma, setIsLoadingLuma] = useState(false);
   const [lumaError, setLumaError] = useState('');
+  const [lumaEventDate, setLumaEventDate] = useState<string | null>(null);
 
   const handleFetchFromLuma = async () => {
     if (!lumaUrl || !lumaService.isLumaUrl(lumaUrl)) {
@@ -35,6 +36,35 @@ export default function EventForm({ day, onClose }: EventFormProps) {
       const eventData = await lumaService.fetchEventData(lumaUrl);
 
       if (eventData) {
+        // Validate that Luma event date matches the selected day
+        if (eventData.startTime) {
+          const lumaEventStart = new Date(eventData.startTime);
+          const lumaDateStr = lumaEventStart.toISOString().split('T')[0]; // Get YYYY-MM-DD
+
+          // Check if Luma event date matches the day we're adding to
+          if (lumaDateStr !== day.date) {
+            const lumaDateFormatted = new Date(lumaDateStr).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            const dayDateFormatted = new Date(day.date).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+
+            setLumaError(`⚠️ Date mismatch! This Luma event is scheduled for ${lumaDateFormatted}, but you're trying to add it to ${dayDateFormatted}. Please select the correct date.`);
+            setLumaEventDate(lumaDateStr);
+            setIsLoadingLuma(false);
+            return;
+          }
+
+          setLumaEventDate(lumaDateStr);
+        }
+
         // Auto-fill form with fetched data
         if (eventData.title) setTitle(eventData.title);
         if (eventData.location.name) setLocationName(eventData.location.name);
@@ -71,6 +101,12 @@ export default function EventForm({ day, onClose }: EventFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !startTime || !endTime || !locationName) return;
+
+    // Validate Luma event date matches the selected day
+    if (lumaUrl && lumaEventDate && lumaEventDate !== day.date) {
+      setLumaError('⚠️ Cannot add this Luma event to this date. The event date does not match.');
+      return;
+    }
 
     // Generate Google Maps URL for the location
     const location = {
@@ -220,6 +256,7 @@ export default function EventForm({ day, onClose }: EventFormProps) {
                 onChange={(e) => {
                   setLumaUrl(e.target.value);
                   setLumaError('');
+                  setLumaEventDate(null); // Clear date validation when URL changes
                 }}
                 placeholder="https://luma.com/..."
                 className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
