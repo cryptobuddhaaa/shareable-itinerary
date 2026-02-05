@@ -28,7 +28,7 @@ export default function ItineraryForm() {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
+        error.issues.forEach((err) => {
           const field = err.path[0] as string;
           fieldErrors[field] = err.message;
         });
