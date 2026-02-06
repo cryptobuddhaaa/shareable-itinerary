@@ -44,7 +44,17 @@ User Input: "${userMessage}"
 
 Your task:
 1. Parse the user's message and extract event details
-2. Infer missing information intelligently:
+2. Calculate the date (CRITICAL - use TODAY'S DATE: ${context.currentDate || new Date().toISOString().split('T')[0]}):
+   - "tomorrow" = today + 1 day
+   - "next Tuesday" = find next Tuesday from today
+   - "on the 15th" = Feb 15 within trip range, otherwise ask
+3. VALIDATE THE DATE (CRITICAL):
+   - Trip dates: ${context.startDate} to ${context.endDate}
+   - If calculated date is BEFORE trip start or AFTER trip end:
+     * DO NOT create the event
+     * Explain the date falls outside the itinerary
+     * Ask if they meant a date within ${context.startDate} to ${context.endDate}
+4. Infer missing information intelligently:
    - Event type (meeting, travel, meal, buffer, accommodation, activity, side-event, main-conference)
    - Duration (if only start time given):
      * Meetings: 1 hour default
@@ -52,12 +62,7 @@ Your task:
      * Travel: 2 hours default for flights, 30 minutes for local transport
      * Activities: 2 hours default
    - Location (if not specified, use primary location: ${context.location})
-3. Handle relative dates (CRITICAL - use TODAY'S DATE provided above):
-   - "tomorrow" = today's date + 1 day
-   - "next Tuesday" = find next Tuesday from today
-   - "on the 15th" = use current month if within trip dates, otherwise ask
-   - ALWAYS calculate from the TODAY'S DATE provided above, not trip start date
-4. Return a structured JSON response
+5. Return a structured JSON response
 
 Event Type Guidelines:
 - "meeting" = business meetings, calls, appointments
@@ -122,6 +127,15 @@ Output:
   "message": "I'd be happy to add dinner with Sarah. What time and date would you like?",
   "needsClarification": true,
   "clarificationQuestion": "When would you like to have dinner with Sarah? Please provide the date and time."
+}
+
+Input: "Lunch meeting at noon tomorrow" (when tomorrow is Feb 7 but trip is Feb 9-12)
+Output:
+{
+  "action": "clarify",
+  "message": "Tomorrow (Feb 7) is before your trip starts on Feb 9. Did you mean lunch on Feb 9, 10, 11, or 12?",
+  "needsClarification": true,
+  "clarificationQuestion": "Which day during your trip (Feb 9-12) would you like to schedule this lunch meeting?"
 }
 
 Input: "Meeting at the conference center tomorrow at 2pm"
