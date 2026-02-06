@@ -43,7 +43,15 @@ ${eventsSummary}
 
 User Input: "${userMessage}"
 
-STEP-BY-STEP PROCESS (follow in order):
+DETERMINE USER INTENT FIRST:
+Is the user asking to:
+A) VIEW/READ their schedule? (e.g., "what's on my schedule", "show me Feb 9", "what do I have")
+B) CREATE a new event? (e.g., "add lunch at noon", "schedule meeting")
+
+If A (VIEW): Filter events by the requested date and return a summary. DO NOT create an event.
+If B (CREATE): Follow the creation steps below.
+
+STEP-BY-STEP PROCESS (for creating events):
 
 STEP 1: Calculate the actual date
 - If user says "tomorrow": Calculate ${context.currentDate} + 1 day
@@ -75,6 +83,24 @@ STEP 4: Infer missing information (only if date is valid)
 - Location: Use ${context.location} if not specified
 
 STEP 5: Return structured JSON
+
+FOR VIEWING SCHEDULE (when user asks to see their schedule):
+1. Parse which date they're asking about (e.g., "Feb 9", "tomorrow", "the 10th")
+2. Filter events to ONLY that specific date
+3. Return this format:
+{
+  "action": "clarify",
+  "message": "Here's your schedule for [date]:\n\n[List only events for that date with times]",
+  "needsClarification": false
+}
+4. DO NOT return all events - only events for the requested date
+
+Example for "what's on my schedule for Feb 9":
+{
+  "action": "clarify",
+  "message": "Here's your schedule for February 9, 2026:\n\n• 8:00 AM - 10:00 AM: Flight Arrival\n• 12:00 PM - 1:00 PM: Lunch Meeting\n\nYou have 2 events scheduled.",
+  "needsClarification": false
+}
 
 Event Type Guidelines:
 - "meeting" = business meetings, calls, appointments
