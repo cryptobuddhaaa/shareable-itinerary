@@ -115,10 +115,10 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Shared Itinerary</h1>
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <div className="flex-shrink-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Shared Itinerary</h1>
                 <p className="text-sm text-gray-600 mt-1">{sharedItinerary.title}</p>
                 {sharedItinerary.createdByName && (
                   <p className="text-xs text-gray-500 mt-1">
@@ -126,20 +126,21 @@ function App() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
                 {user ? (
                   <>
                     <a
                       href={window.location.origin + window.location.pathname}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      className="inline-flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 whitespace-nowrap"
                     >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                       </svg>
-                      Back to My Itineraries
+                      <span className="hidden sm:inline">Back to My Itineraries</span>
+                      <span className="sm:hidden">Back</span>
                     </a>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="text-right hidden sm:block">
                         <p className="text-sm font-medium text-gray-900">{user?.user_metadata?.full_name || user?.email}</p>
                         <p className="text-xs text-gray-500">{user?.email}</p>
                       </div>
@@ -147,7 +148,7 @@ function App() {
                         <img
                           src={user.user_metadata.avatar_url}
                           alt="Profile"
-                          className="w-10 h-10 rounded-full"
+                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"
                         />
                       )}
                     </div>
@@ -155,9 +156,10 @@ function App() {
                 ) : (
                   <a
                     href={window.location.origin + window.location.pathname}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                    className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
                   >
-                    Create Your Own Itinerary
+                    <span className="hidden sm:inline">Create Your Own Itinerary</span>
+                    <span className="sm:hidden">Create Your Own</span>
                   </a>
                 )}
               </div>
@@ -190,26 +192,26 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Itinerary Builder</h1>
-              <p className="text-sm text-gray-600 mt-1">Plan and share your trips</p>
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div className="flex-shrink-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Itinerary Builder</h1>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">Plan and share your trips</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
               {itinerary && (
                 <button
                   onClick={() => setShowShareDialog(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
-                  Share
+                  <span className="hidden sm:inline">Share</span>
                 </button>
               )}
-              <div className="flex items-center gap-3">
-                <div className="text-right">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium text-gray-900">{user?.user_metadata?.full_name || user?.email}</p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
@@ -217,12 +219,12 @@ function App() {
                   <img
                     src={user.user_metadata.avatar_url}
                     alt="Profile"
-                    className="w-10 h-10 rounded-full"
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"
                   />
                 )}
                 <button
                   onClick={signOut}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-2 sm:px-3 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   title="Sign out"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,11 +248,11 @@ function App() {
           </div>
         ) : (
           <div>
-            <div className="mb-6">
-              <nav className="flex space-x-4 border-b border-gray-200">
+            <div className="mb-6 -mx-4 sm:mx-0">
+              <nav className="flex space-x-2 sm:space-x-4 border-b border-gray-200 overflow-x-auto px-4 sm:px-0 scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('itinerary')}
-                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                  className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'itinerary'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -260,22 +262,23 @@ function App() {
                 </button>
                 <button
                   onClick={() => setActiveTab('shared')}
-                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                  className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'shared'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Others' Itineraries
+                  <span className="hidden sm:inline">Others' Itineraries</span>
+                  <span className="sm:hidden">Others'</span>
                   {viewedSharedItineraries.length > 0 && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <span className="ml-1 sm:ml-2 inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       {viewedSharedItineraries.length}
                     </span>
                   )}
                 </button>
                 <button
                   onClick={() => setActiveTab('contacts')}
-                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                  className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
                     activeTab === 'contacts'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
