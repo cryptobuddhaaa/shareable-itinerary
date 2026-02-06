@@ -55,7 +55,8 @@ interface BriefingResponse {
 
 class AIService {
   private apiKey: string;
-  private apiEndpoint = 'https://api.anthropic.com/v1/messages';
+  // Use proxy endpoint in development, will be serverless in production
+  private apiEndpoint = import.meta.env.DEV ? '/api/claude' : 'https://api.anthropic.com/v1/messages';
   private model = 'claude-sonnet-4-5-20250929';
 
   constructor() {
@@ -166,19 +167,26 @@ class AIService {
   ): Promise<string> {
     const { temperature = 0.3, maxTokens = 1024 } = options;
 
-    // For MVP, we'll call the API directly
-    // TODO: Move this to serverless function for production
-    if (!this.apiKey) {
+    // For MVP, we'll call the API via proxy in dev, serverless in production
+    // In dev mode, the Vite proxy adds the API key header
+    if (!import.meta.env.DEV && !this.apiKey) {
       throw new Error('Claude API key not configured');
+    }
+
+    // Headers differ based on whether we're using the proxy
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    // Only add API key header if not using dev proxy (proxy adds it)
+    if (!import.meta.env.DEV) {
+      headers['x-api-key'] = this.apiKey;
+      headers['anthropic-version'] = '2023-06-01';
     }
 
     const response = await fetch(this.apiEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01'
-      },
+      headers,
       body: JSON.stringify({
         model: this.model,
         max_tokens: maxTokens,
