@@ -86,6 +86,15 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
 
   const handleAIEventCreate = async (aiEvent: any) => {
     try {
+      console.log('AI Event received:', aiEvent);
+
+      // Validate that we have the required fields
+      if (!aiEvent.startTime || !aiEvent.endTime) {
+        console.error('Missing time fields:', aiEvent);
+        alert('Event is missing required time information. Please try again.');
+        return;
+      }
+
       // Map AI event format (camelCase) to app event format (snake_case)
       const event = {
         title: aiEvent.title,
@@ -101,12 +110,24 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         luma_event_url: '' // Not provided by AI
       };
 
+      console.log('Mapped event:', event);
+
       // Find the day this event belongs to
-      const eventDate = new Date(event.start_time).toISOString().split('T')[0];
+      // Validate the date can be parsed
+      const startDate = new Date(event.start_time);
+      if (isNaN(startDate.getTime())) {
+        console.error('Invalid start_time:', event.start_time);
+        alert('Event has an invalid date/time. Please try again.');
+        return;
+      }
+
+      const eventDate = startDate.toISOString().split('T')[0];
+      console.log('Looking for day:', eventDate);
+
       const day = itinerary.days.find((d) => d.date === eventDate);
 
       if (!day) {
-        alert('Could not find the day for this event. Please try adding it manually.');
+        alert(`Could not find the day ${eventDate} in your itinerary. Please try adding it manually.`);
         return;
       }
 
