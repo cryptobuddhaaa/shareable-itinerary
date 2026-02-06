@@ -53,6 +53,31 @@ export function AIAssistantModal({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Load conversation history from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(`ai-conversation-${itinerary.id}`);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        // Convert timestamp strings back to Date objects
+        const restoredMessages = parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(restoredMessages);
+      } catch (e) {
+        console.error('Error loading conversation history:', e);
+      }
+    }
+  }, [itinerary.id]);
+
+  // Save conversation history to localStorage whenever messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(`ai-conversation-${itinerary.id}`, JSON.stringify(messages));
+    }
+  }, [messages, itinerary.id]);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -72,19 +97,23 @@ export function AIAssistantModal({
     }
   }, [isOpen, user]);
 
-  // Add welcome message when modal opens
+  // Add welcome message when modal opens (only if no conversation history)
   useEffect(() => {
     if (isOpen && messages.length === 0) {
-      setMessages([
-        {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: `Hi! I'm your AI assistant. I can help you create events for "${itinerary.title}". Just tell me what you'd like to add, for example:\n\n• "My flight arrives at 8am on Feb 9"\n• "Lunch meeting with Sarah at noon tomorrow"\n• "Conference keynote from 10am to 11:30am on Monday"\n\nWhat would you like to add?`,
-          timestamp: new Date()
-        }
-      ]);
+      // Check if there's saved conversation
+      const stored = localStorage.getItem(`ai-conversation-${itinerary.id}`);
+      if (!stored) {
+        setMessages([
+          {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `Hi! I'm your AI assistant. I can help you create events for "${itinerary.title}". Just tell me what you'd like to add, for example:\n\n• "My flight arrives at 8am on Feb 9"\n• "Lunch meeting with Sarah at noon tomorrow"\n• "Conference keynote from 10am to 11:30am on Monday"\n\nWhat would you like to add?`,
+            timestamp: new Date()
+          }
+        ]);
+      }
     }
-  }, [isOpen, itinerary.title]);
+  }, [isOpen, itinerary.id]);
 
   const checkUsageLimit = async () => {
     try {
@@ -245,6 +274,22 @@ export function AIAssistantModal({
     }
   };
 
+  const handleClearConversation = () => {
+    if (confirm('Clear conversation history? This cannot be undone.')) {
+      setMessages([]);
+      localStorage.removeItem(`ai-conversation-${itinerary.id}`);
+      // Add welcome message again
+      setMessages([
+        {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `Hi! I'm your AI assistant. I can help you create events for "${itinerary.title}". Just tell me what you'd like to add, for example:\n\n• "My flight arrives at 8am on Feb 9"\n• "Lunch meeting with Sarah at noon tomorrow"\n• "Conference keynote from 10am to 11:30am on Monday"\n\nWhat would you like to add?`,
+          timestamp: new Date()
+        }
+      ]);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -260,6 +305,15 @@ export function AIAssistantModal({
             <div className="text-sm text-gray-600">
               {usageInfo.remaining}/{usageInfo.limit} queries remaining
             </div>
+            {messages.length > 1 && (
+              <button
+                onClick={handleClearConversation}
+                className="text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
+                title="Clear conversation history"
+              >
+                Clear
+              </button>
+            )}
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
