@@ -84,33 +84,19 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
-  const handleAIEventCreate = async (aiEvent: any) => {
+  const handleAIEventCreate = async (event: any) => {
     try {
-      console.log('AI Event received:', aiEvent);
+      console.log('AI Event received:', event);
 
       // Validate that we have the required fields
-      if (!aiEvent.startTime || !aiEvent.endTime) {
-        console.error('Missing time fields:', aiEvent);
+      // Note: AIAssistantModal already converts camelCase to snake_case
+      if (!event.start_time || !event.end_time) {
+        console.error('Missing time fields:', event);
         alert('Event is missing required time information. Please try again.');
         return;
       }
 
-      // Map AI event format (camelCase) to app event format (snake_case)
-      const event = {
-        title: aiEvent.title,
-        start_time: aiEvent.startTime, // AI uses startTime, app uses start_time
-        end_time: aiEvent.endTime,     // AI uses endTime, app uses end_time
-        event_type: aiEvent.eventType, // AI uses eventType, app uses event_type
-        location: {
-          name: aiEvent.location?.name || itinerary.location,
-          address: aiEvent.location?.address || ''
-        },
-        description: aiEvent.description || '',
-        goals: [], // Optional: parse from description if needed
-        luma_event_url: '' // Not provided by AI
-      };
-
-      console.log('Mapped event:', event);
+      console.log('Event validated:', event);
 
       // Find the day this event belongs to
       // Validate the date can be parsed
