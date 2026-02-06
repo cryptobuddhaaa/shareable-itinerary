@@ -10,7 +10,7 @@ import ItineraryTimeline from './components/ItineraryTimeline';
 import ShareDialog from './components/ShareDialog';
 import ContactsPage from './components/ContactsPage';
 
-type ActiveTab = 'itinerary' | 'contacts';
+type ActiveTab = 'itinerary' | 'contacts' | 'shared';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -21,19 +21,57 @@ function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
   const [prevItineraryCount, setPrevItineraryCount] = useState(itineraries.length);
   const [sharedItinerary, setSharedItinerary] = useState<any>(null);
+  const [viewedSharedItineraries, setViewedSharedItineraries] = useState<any[]>([]);
+  const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<any>(null);
 
   const itinerary = currentItinerary();
+
+  // Load viewed shared itineraries from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('viewedSharedItineraries');
+    if (stored) {
+      try {
+        setViewedSharedItineraries(JSON.parse(stored));
+      } catch (e) {
+        console.error('Error loading viewed shared itineraries:', e);
+      }
+    }
+  }, []);
+
+  // Save viewed shared itineraries to localStorage whenever it changes
+  useEffect(() => {
+    if (viewedSharedItineraries.length > 0) {
+      localStorage.setItem('viewedSharedItineraries', JSON.stringify(viewedSharedItineraries));
+    }
+  }, [viewedSharedItineraries]);
 
   // Check for shared itinerary in URL on mount
   useEffect(() => {
     const loadSharedItinerary = async () => {
       const urlItinerary = await shareService.loadFromUrl();
       if (urlItinerary) {
-        setSharedItinerary(urlItinerary);
+        if (user) {
+          // If user is logged in, add to viewed shared itineraries
+          setViewedSharedItineraries((prev) => {
+            // Check if already exists
+            const exists = prev.some(item => item.id === urlItinerary.id);
+            if (exists) {
+              return prev;
+            }
+            return [urlItinerary, ...prev];
+          });
+          setActiveTab('shared');
+          setSelectedSharedItinerary(urlItinerary);
+          // Clear the URL parameter
+          window.history.replaceState({}, '', window.location.pathname);
+        } else {
+          // If not logged in, show the standalone shared view
+          setSharedItinerary(urlItinerary);
+        }
       }
     };
     loadSharedItinerary();
-  }, []);
+  }, [user]);
 
   // Initialize itineraries and contacts when user logs in
   useEffect(() => {
@@ -218,7 +256,22 @@ function App() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  Itinerary
+                  My Itineraries
+                </button>
+                <button
+                  onClick={() => setActiveTab('shared')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === 'shared'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Others' Itineraries
+                  {viewedSharedItineraries.length > 0 && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {viewedSharedItineraries.length}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setActiveTab('contacts')}
@@ -268,6 +321,107 @@ function App() {
 
                 {itinerary && <ItineraryTimeline />}
               </>
+            )}
+
+            {activeTab === 'shared' && (
+              <div>
+                {viewedSharedItineraries.length === 0 ? (
+                  <div className="text-center py-12 bg-white rounded-lg shadow">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No shared itineraries yet</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      When someone shares an itinerary with you, it will appear here
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    {!selectedSharedItinerary ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center mb-4">
+                          <div>
+                            <h2 className="text-lg font-semibold text-gray-900">Shared Itineraries</h2>
+                            <p className="text-sm text-gray-600 mt-1">
+                              Itineraries that have been shared with you
+                            </p>
+                          </div>
+                          {viewedSharedItineraries.length > 0 && (
+                            <button
+                              onClick={() => {
+                                if (confirm('Clear all shared itineraries from this list?')) {
+                                  setViewedSharedItineraries([]);
+                                  localStorage.removeItem('viewedSharedItineraries');
+                                }
+                              }}
+                              className="text-sm text-red-600 hover:text-red-700"
+                            >
+                              Clear All
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid gap-4">
+                          {viewedSharedItineraries.map((sharedItem) => (
+                            <div
+                              key={sharedItem.id}
+                              className="bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                              onClick={() => setSelectedSharedItinerary(sharedItem)}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <h3 className="text-lg font-semibold text-gray-900">{sharedItem.title}</h3>
+                                  <p className="text-sm text-gray-600 mt-1">{sharedItem.location}</p>
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                    <span>{new Date(sharedItem.startDate).toLocaleDateString()} - {new Date(sharedItem.endDate).toLocaleDateString()}</span>
+                                    {sharedItem.createdByName && (
+                                      <span>Shared by {sharedItem.createdByName}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewedSharedItineraries((prev) =>
+                                      prev.filter((item) => item.id !== sharedItem.id)
+                                    );
+                                  }}
+                                  className="text-gray-400 hover:text-red-600"
+                                  title="Remove from list"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="mb-4">
+                          <button
+                            onClick={() => setSelectedSharedItinerary(null)}
+                            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Back to list
+                          </button>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                          <p className="text-sm text-blue-900">
+                            📌 Viewing shared itinerary: <strong>{selectedSharedItinerary.title}</strong>
+                            {selectedSharedItinerary.createdByName && ` from ${selectedSharedItinerary.createdByName}`}
+                          </p>
+                        </div>
+                        <ItineraryTimeline sharedItinerary={selectedSharedItinerary} readOnly={true} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === 'contacts' && <ContactsPage />}
