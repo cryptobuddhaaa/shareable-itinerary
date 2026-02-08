@@ -90,25 +90,60 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     try {
       console.log(`Importing ${events.length} events from Google Calendar`);
 
+      let importedCount = 0;
+      let skippedCount = 0;
+      const skippedEvents: string[] = [];
+
       for (const event of events) {
         // Validate and add each event
         if (!event.start_time || !event.end_time) {
           console.warn('Skipping event with missing time fields:', event);
+          skippedCount++;
           continue;
         }
 
         const startDate = new Date(event.start_time);
         if (isNaN(startDate.getTime())) {
           console.warn('Skipping event with invalid date:', event);
+          skippedCount++;
+          continue;
+        }
+
+        // Check for duplicate events by matching title and start time
+        const isDuplicate = itinerary.days.some(day =>
+          day.events.some(existingEvent =>
+            existingEvent.title === event.title &&
+            existingEvent.startTime === event.start_time
+          )
+        );
+
+        if (isDuplicate) {
+          console.log(`Skipping duplicate event: ${event.title}`);
+          skippedEvents.push(event.title);
+          skippedCount++;
           continue;
         }
 
         // Extract date string for addEvent
         const dateStr = event.start_time.split('T')[0];
         await addEvent(dateStr, event);
+        importedCount++;
       }
 
-      alert(`Successfully imported ${events.length} event${events.length !== 1 ? 's' : ''} from Google Calendar!`);
+      // Show result message
+      let message = '';
+      if (importedCount > 0) {
+        message += `Successfully imported ${importedCount} event${importedCount !== 1 ? 's' : ''}!`;
+      }
+      if (skippedCount > 0) {
+        message += `${importedCount > 0 ? '\n\n' : ''}Skipped ${skippedCount} duplicate event${skippedCount !== 1 ? 's' : ''}`;
+        if (skippedEvents.length > 0) {
+          message += `:\n• ${skippedEvents.join('\n• ')}`;
+        }
+      }
+      if (message) {
+        alert(message);
+      }
     } catch (error) {
       console.error('Error importing events:', error);
       alert('Failed to import some events. Please try again.');
