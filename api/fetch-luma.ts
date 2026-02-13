@@ -200,7 +200,6 @@ function parseEventHtml(html: string): LumaEventData | null {
             description: eventSchema.description ? decodeHtmlEntities(eventSchema.description) : (descMatch ? decodeHtmlEntities(descMatch[1]) : undefined),
           };
 
-          console.log('Parsed event data:', eventData); // Debug log
           break; // Found event data, stop looking
         }
       } catch (e) {
@@ -266,7 +265,6 @@ function parseEventHtml(html: string): LumaEventData | null {
         description,
       };
 
-      console.log('Fallback parsed event data:', eventData); // Debug log
     }
 
     return eventData;

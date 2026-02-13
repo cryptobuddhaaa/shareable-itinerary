@@ -23,8 +23,6 @@ export function PaywallModal({ isOpen, onClose, currentTier, usageInfo }: Paywal
   const proPricing = subscriptionService.getTierPricing('pro');
 
   const handleUpgrade = (tier: SubscriptionTier) => {
-    // TODO: Implement Stripe checkout
-    console.log('Upgrade to:', tier);
     alert(`Stripe integration coming soon! You selected ${tier} tier.`);
   };
 

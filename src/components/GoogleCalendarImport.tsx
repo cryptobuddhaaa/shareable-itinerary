@@ -21,13 +21,9 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('GoogleCalendarImport mounted');
-
     // Check if just connected from OAuth callback
     const justConnected = sessionStorage.getItem('google_calendar_connected') === 'true';
     const hasToken = googleCalendarService.isConnected();
-
-    console.log('Connection status:', { justConnected, hasToken });
 
     if (justConnected) {
       sessionStorage.removeItem('google_calendar_connected');
@@ -66,21 +62,11 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       timeMax.setHours(23, 59, 59, 999);
       const timeMaxISO = timeMax.toISOString();
 
-      console.log('Fetching Luma events for date range:', {
-        itinerary: itinerary.title,
-        startDate: itinerary.startDate,
-        endDate: itinerary.endDate,
-        timeMin,
-        timeMaxISO
-      });
-
       const events = await googleCalendarService.fetchLumaEvents(
         accessToken,
         timeMin,
         timeMaxISO
       );
-
-      console.log('Received events from API:', events);
 
       setLumaEvents(events);
 
@@ -140,8 +126,6 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       setIsLoading(false);
     }
   };
-
-  console.log('Rendering GoogleCalendarImport, isConnected:', isConnected);
 
   return (
     <div className="space-y-4">

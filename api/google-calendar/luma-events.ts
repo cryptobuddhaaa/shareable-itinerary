@@ -62,12 +62,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await calendarResponse.json();
     const allEvents = data.items || [];
 
-    // Log first few organizer emails for debugging
-    console.log('Sample organizer emails:', allEvents.slice(0, 5).map((e: any) => ({
-      title: e.summary,
-      organizer: e.organizer?.email
-    })));
-
     // Filter to only Luma events (organizer email matches)
     const lumaEvents = allEvents.filter((event: any) => {
       const organizerEmail = event.organizer?.email?.toLowerCase();
@@ -79,8 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return isLuma || isLumaVariant;
     });
 
-    console.log(`Found ${allEvents.length} total events, ${lumaEvents.length} Luma events`);
-    console.log('Luma event titles:', lumaEvents.map((e: any) => e.summary));
+
 
     return res.status(200).json(lumaEvents);
   } catch (error) {

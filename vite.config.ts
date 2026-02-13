@@ -5,9 +5,6 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
-  // Log API key status for debugging (first 10 chars only)
-  console.log('Claude API Key loaded:', env.CLAUDE_API_KEY ? `${env.CLAUDE_API_KEY.substring(0, 15)}...` : 'NOT FOUND');
-
   return {
     plugins: [react()],
     server: {
@@ -19,8 +16,6 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/claude/, '/v1/messages'),
           configure: (proxy, _options) => {
             proxy.on('proxyReq', (proxyReq, _req, _res) => {
-              console.log('Proxying request to Claude API...');
-
               // Add required headers for Claude API
               proxyReq.setHeader('x-api-key', env.CLAUDE_API_KEY || '');
               proxyReq.setHeader('anthropic-version', '2023-06-01');
@@ -29,10 +24,6 @@ export default defineConfig(({ mode }) => {
               // Remove browser-specific headers that might cause issues
               proxyReq.removeHeader('origin');
               proxyReq.removeHeader('referer');
-            });
-
-            proxy.on('proxyRes', (proxyRes, _req, _res) => {
-              console.log('Received response from Claude API:', proxyRes.statusCode);
             });
 
             proxy.on('error', (err, _req, _res) => {
