@@ -2,10 +2,11 @@
  * Vercel Serverless Function: Fetch Luma events from Google Calendar
  * POST /api/google-calendar/luma-events
  *
- * Filters Google Calendar events to only return those organized by Luma.
- * Detection methods:
- *   1. Organizer email is calendar-invite@lu.ma (or contains lu.ma)
- *   2. Event description contains a https://lu.ma/ or https://luma.com/event/ link
+ * Filters Google Calendar events to only return those from Luma.
+ * Detection methods (any match = Luma event):
+ *   1. Organizer email is calendar-invite@lu.ma or contains lu.ma
+ *   2. Any attendee has an @lu.ma email address
+ *   3. Description contains a lu.ma, luma.com, or www.luma.com link
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -22,8 +23,28 @@ interface GoogleCalendarItem {
   attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
 }
 
-const LUMA_ORGANIZER_EMAIL = 'calendar-invite@lu.ma';
-const LUMA_DESCRIPTION_PATTERN = /https?:\/\/(?:lu\.ma\/|luma\.com\/event\/)/i;
+// Matches lu.ma/..., luma.com/event/..., or www.luma.com/event/...
+const LUMA_URL_PATTERN = /https?:\/\/(?:(?:www\.)?luma\.com\/event\/|lu\.ma\/)/i;
+
+function isLumaEvent(event: GoogleCalendarItem): boolean {
+  // Check 1: organizer email from lu.ma
+  const organizerEmail = event.organizer?.email?.toLowerCase() || '';
+  if (organizerEmail.includes('lu.ma')) {
+    return true;
+  }
+
+  // Check 2: any attendee has an @lu.ma email
+  if (event.attendees?.some((a) => a.email?.toLowerCase().endsWith('@lu.ma'))) {
+    return true;
+  }
+
+  // Check 3: description contains a Luma URL
+  if (event.description && LUMA_URL_PATTERN.test(event.description)) {
+    return true;
+  }
+
+  return false;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
@@ -78,20 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const allEvents: GoogleCalendarItem[] = data.items || [];
 
     // Filter to only Luma events
-    const lumaEvents = allEvents.filter((event) => {
-      // Check 1: organizer email matches lu.ma
-      const organizerEmail = event.organizer?.email?.toLowerCase();
-      if (organizerEmail === LUMA_ORGANIZER_EMAIL.toLowerCase() || organizerEmail?.includes('lu.ma')) {
-        return true;
-      }
-
-      // Check 2: description contains a lu.ma or luma.com/event link
-      if (event.description && LUMA_DESCRIPTION_PATTERN.test(event.description)) {
-        return true;
-      }
-
-      return false;
-    });
+    const lumaEvents = allEvents.filter(isLumaEvent);
 
 
 
