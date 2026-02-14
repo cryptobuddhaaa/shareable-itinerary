@@ -32,9 +32,10 @@ export const shareService = {
    */
   generateShareId(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const randomValues = crypto.getRandomValues(new Uint8Array(12));
     let result = '';
     for (let i = 0; i < 12; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(randomValues[i] % chars.length);
     }
     return result;
   },
@@ -135,9 +136,6 @@ export const shareService = {
           console.error('Itinerary not found:', itineraryError);
           return null;
         }
-
-        // TODO: Increment view count (requires SQL function or fetch-then-update)
-        // Skipping for now to avoid build errors
 
         // Transform database format to app format
         const itinerary: Itinerary = {

@@ -16,9 +16,22 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing or invalid url parameter' });
   }
 
-  // Validate it's actually a Luma URL
-  if (!url.includes('lu.ma') && !url.includes('luma.com')) {
+  // Validate it's actually a Luma URL using proper URL parsing
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  if (hostname !== 'lu.ma' && !hostname.endsWith('.lu.ma') &&
+      hostname !== 'luma.com' && !hostname.endsWith('.luma.com')) {
     return res.status(400).json({ error: 'URL must be from lu.ma or luma.com' });
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'URL must use HTTPS' });
   }
 
   try {

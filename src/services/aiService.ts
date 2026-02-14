@@ -229,7 +229,11 @@ class AIService {
     }
 
     const data = await response.json();
-    return data.content[0].text;
+    const text = data?.content?.[0]?.text;
+    if (typeof text !== 'string') {
+      throw new Error('Unexpected API response format');
+    }
+    return text;
   }
 
   /**
