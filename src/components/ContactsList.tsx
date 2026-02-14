@@ -3,6 +3,8 @@ import { useContacts } from '../hooks/useContacts';
 import EditContactDialog from './EditContactDialog';
 import { extractLinkedInHandle } from '../lib/validation';
 import type { Contact } from '../models/types';
+import { toast } from './Toast';
+import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 
 interface ContactsListProps {
   itineraryId?: string; // If provided, filter contacts by itinerary
@@ -12,6 +14,7 @@ interface ContactsListProps {
 export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
   const { contacts, getContactsByItinerary, deleteContact } = useContacts();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const displayContacts = providedContacts
     ? providedContacts
@@ -29,12 +32,18 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
   };
 
   const handleDelete = async (contact: Contact) => {
-    if (confirm(`Delete contact for ${contact.firstName} ${contact.lastName}?`)) {
+    const confirmed = await confirm({
+      title: `Delete contact?`,
+      message: `Are you sure you want to delete the contact for ${contact.firstName} ${contact.lastName}?`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (confirmed) {
       try {
         await deleteContact(contact.id);
       } catch (error) {
         console.error('Error deleting contact:', error);
-        alert('Failed to delete contact. Please try again.');
+        toast.error('Failed to delete contact. Please try again.');
       }
     }
   };
@@ -88,6 +97,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                   onClick={() => setEditingContact(contact)}
                   className="text-blue-600 hover:text-blue-800 p-1"
                   title="Edit contact"
+                  aria-label="Edit contact"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -102,6 +112,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                   onClick={() => handleDelete(contact)}
                   className="text-red-600 hover:text-red-800 p-1"
                   title="Delete contact"
+                  aria-label="Delete contact"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -195,6 +206,8 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
       {editingContact && (
         <EditContactDialog contact={editingContact} onClose={() => setEditingContact(null)} />
       )}
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

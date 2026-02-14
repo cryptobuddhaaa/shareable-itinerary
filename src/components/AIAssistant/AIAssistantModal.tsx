@@ -10,6 +10,7 @@ import aiService from '../../services/aiService';
 import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
 import type { Itinerary, ItineraryEvent, Contact } from '../../models/types';
+import { ConfirmDialog, useConfirmDialog } from '../ConfirmDialog';
 
 type SuggestedEvent = {
   _deleteAction?: false;
@@ -70,6 +71,7 @@ export function AIAssistantModal({
     tier: 'free' as 'free' | 'premium' | 'pro'
   });
   const [showPaywall, setShowPaywall] = useState(false);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -362,8 +364,14 @@ export function AIAssistantModal({
     }
   };
 
-  const handleClearConversation = () => {
-    if (confirm('Clear conversation history? This cannot be undone.')) {
+  const handleClearConversation = async () => {
+    const confirmed = await confirm({
+      title: 'Clear conversation',
+      message: 'Clear conversation history? This cannot be undone.',
+      confirmLabel: 'Clear',
+      variant: 'danger',
+    });
+    if (confirmed) {
       setMessages([]);
       localStorage.removeItem(`ai-conversation-${itinerary.id}`);
       // Add welcome message again
@@ -556,6 +564,8 @@ export function AIAssistantModal({
           limit: usageInfo.limit
         }}
       />
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

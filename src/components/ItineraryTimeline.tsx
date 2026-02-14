@@ -9,6 +9,8 @@ import ContactsList from './ContactsList';
 import { AIAssistantModal } from './AIAssistant/AIAssistantModal';
 import GoogleCalendarImport from './GoogleCalendarImport';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
+import { toast } from './Toast';
+import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 
 interface ItineraryTimelineProps {
   sharedItinerary?: Itinerary;
@@ -26,6 +28,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [contactsExpanded, setContactsExpanded] = useState(true);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const itinerary = sharedItinerary || currentItinerary();
   if (!itinerary) return null;
@@ -65,22 +68,27 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     const eventContacts = getContactsByEvent(event.id);
     const contactCount = eventContacts.length;
 
-    let confirmMessage = 'Delete this event?';
+    let message = 'This action cannot be undone.';
     if (contactCount > 0) {
-      confirmMessage = `Delete this event?\n\n⚠️ Warning: This event has ${contactCount} contact${contactCount > 1 ? 's' : ''} associated with it. ${contactCount > 1 ? 'They' : 'This contact'} will also be deleted.`;
+      message = `This event has ${contactCount} contact${contactCount > 1 ? 's' : ''} associated with it. ${contactCount > 1 ? 'They' : 'This contact'} will also be deleted.`;
     }
 
-    if (confirm(confirmMessage)) {
+    const confirmed = await confirm({
+      title: `Delete "${event.title}"?`,
+      message,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+
+    if (confirmed) {
       try {
-        // Delete associated contacts first
         if (contactCount > 0) {
           await deleteContactsByEvent(event.id);
         }
-        // Then delete the event
         await deleteEvent(event.id);
       } catch (error) {
         console.error('Error deleting event and contacts:', error);
-        alert('Failed to delete event. Please try again.');
+        toast.error('Failed to delete event. Please try again.');
       }
     }
   };
@@ -135,24 +143,24 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         }
       }
       if (message) {
-        alert(message);
+        toast.info(message);
       }
     } catch (error) {
       console.error('Error importing events:', error);
-      alert('Failed to import some events. Please try again.');
+      toast.error('Failed to import some events. Please try again.');
     }
   };
 
   const handleAIEventCreate = async (event: Partial<ItineraryEvent>) => {
     try {
       if (!event.startTime || !event.endTime) {
-        alert('Event is missing required time information. Please try again.');
+        toast.error('Event is missing required time information. Please try again.');
         return;
       }
 
       const startDate = new Date(event.startTime);
       if (isNaN(startDate.getTime())) {
-        alert('Event has an invalid date/time. Please try again.');
+        toast.error('Event has an invalid date/time. Please try again.');
         return;
       }
 
@@ -160,7 +168,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       const day = itinerary.days.find((d) => d.date === eventDate);
 
       if (!day) {
-        alert(`Could not find the day ${eventDate} in your itinerary. Please try adding it manually.`);
+        toast.error(`Could not find the day ${eventDate} in your itinerary. Please try adding it manually.`);
         return;
       }
 
@@ -180,7 +188,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       await addEvent(day.date, fullEvent);
     } catch (error) {
       console.error('Error creating AI event:', error);
-      alert('Failed to create event. Please try again.');
+      toast.error('Failed to create event. Please try again.');
     }
   };
 
@@ -214,10 +222,14 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                 onEventsImport={handleGoogleCalendarImport}
               />
               <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to start over?')) {
-                    clearItinerary();
-                  }
+                onClick={async () => {
+                  const confirmed = await confirm({
+                    title: 'Clear Itinerary',
+                    message: 'Are you sure you want to start over? All events and data will be deleted.',
+                    confirmLabel: 'Clear',
+                    variant: 'danger',
+                  });
+                  if (confirmed) clearItinerary();
                 }}
                 className="text-sm text-red-600 hover:text-red-800 px-4 py-2"
               >
@@ -345,6 +357,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                           }}
                           className="text-green-600 hover:text-green-800 p-2"
                           title="Add contact from this event"
+                          aria-label="Add contact from this event"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -356,6 +369,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                           }}
                           className="text-blue-600 hover:text-blue-800 p-2"
                           title="Edit event"
+                          aria-label="Edit event"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -365,6 +379,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                           onClick={() => handleDeleteEvent(event)}
                           className="text-red-600 hover:text-red-800 p-2"
                           title="Delete event"
+                          aria-label="Delete event"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -460,6 +475,8 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           user={user}
         />
       )}
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

@@ -10,6 +10,8 @@ import ItineraryTimeline from './components/ItineraryTimeline';
 import ShareDialog from './components/ShareDialog';
 import ContactsPage from './components/ContactsPage';
 import type { Itinerary } from './models/types';
+import { Toaster } from './components/Toast';
+import { ConfirmDialog, useConfirmDialog } from './components/ConfirmDialog';
 
 type ActiveTab = 'itinerary' | 'contacts' | 'shared';
 
@@ -24,6 +26,7 @@ function App() {
   const [sharedItinerary, setSharedItinerary] = useState<Itinerary | null>(null);
   const [viewedSharedItineraries, setViewedSharedItineraries] = useState<Itinerary[]>([]);
   const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<Itinerary | null>(null);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const itinerary = currentItinerary();
 
@@ -227,6 +230,7 @@ function App() {
                   onClick={signOut}
                   className="inline-flex items-center px-2 sm:px-3 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   title="Sign out"
+                  aria-label="Sign out"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -301,6 +305,7 @@ function App() {
                   <button
                     onClick={() => setShowCreateForm(false)}
                     className="text-gray-500 hover:text-gray-700"
+                    aria-label="Close"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -352,8 +357,14 @@ function App() {
                           </div>
                           {viewedSharedItineraries.length > 0 && (
                             <button
-                              onClick={() => {
-                                if (confirm('Clear all shared itineraries from this list?')) {
+                              onClick={async () => {
+                                const confirmed = await confirm({
+                                  title: 'Clear shared itineraries',
+                                  message: 'Remove all shared itineraries from this list?',
+                                  confirmLabel: 'Clear All',
+                                  variant: 'danger',
+                                });
+                                if (confirmed) {
                                   setViewedSharedItineraries([]);
                                   localStorage.removeItem('viewedSharedItineraries');
                                 }
@@ -391,6 +402,7 @@ function App() {
                                   }}
                                   className="text-gray-400 hover:text-red-600"
                                   title="Remove from list"
+                                  aria-label="Remove from list"
                                 >
                                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -439,6 +451,9 @@ function App() {
           onClose={() => setShowShareDialog(false)}
         />
       )}
+
+      <Toaster />
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

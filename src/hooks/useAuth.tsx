@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { toast } from '../components/Toast';
 
 interface AuthContextType {
   user: User | null;
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) {
       console.error('Error signing in with Google:', error.message);
-      alert('Failed to sign in with Google. Please try again.');
+      toast.error('Failed to sign in with Google. Please try again.');
     }
   };
 
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('Error signing out:', error.message);
-      alert('Failed to sign out. Please try again.');
+      toast.error('Failed to sign out. Please try again.');
     }
   };
 

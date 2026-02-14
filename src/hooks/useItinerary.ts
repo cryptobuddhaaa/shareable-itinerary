@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 import { supabase } from '../lib/supabase';
+import { toast } from '../components/Toast';
 
 interface ItineraryState {
   itineraries: Itinerary[];
@@ -31,6 +32,21 @@ interface ItineraryState {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
+
+function syncToSupabase(currentId: string, updated: Itinerary) {
+  supabase
+    .from('itineraries')
+    .update({
+      data: { days: updated.days, transitSegments: updated.transitSegments },
+    })
+    .eq('id', currentId)
+    .then(({ error }) => {
+      if (error) {
+        console.error('Error syncing to database:', error);
+        toast.error('Failed to save changes. Please refresh and try again.');
+      }
+    });
+}
 
 export const useItinerary = create<ItineraryState>()((set, get) => ({
   itineraries: [],
@@ -316,19 +332,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
           : it
       );
 
-      // Sync with Supabase asynchronously
       const updated = updatedItineraries.find((it) => it.id === currentId);
-      if (updated) {
-        supabase
-          .from('itineraries')
-          .update({
-            data: { days: updated.days, transitSegments: updated.transitSegments },
-          })
-          .eq('id', currentId)
-          .then(({ error }) => {
-            if (error) console.error('Error syncing day:', error);
-          });
-      }
+      if (updated) syncToSupabase(currentId, updated);
 
       return { itineraries: updatedItineraries };
     });
@@ -350,19 +355,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
           : it
       );
 
-      // Sync with Supabase asynchronously
       const updated = updatedItineraries.find((it) => it.id === currentId);
-      if (updated) {
-        supabase
-          .from('itineraries')
-          .update({
-            data: { days: updated.days, transitSegments: updated.transitSegments },
-          })
-          .eq('id', currentId)
-          .then(({ error }) => {
-            if (error) console.error('Error syncing day update:', error);
-          });
-      }
+      if (updated) syncToSupabase(currentId, updated);
 
       return { itineraries: updatedItineraries };
     });
@@ -402,19 +396,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
           : it
       );
 
-      // Sync with Supabase
       const updated = updatedItineraries.find((it) => it.id === currentId);
-      if (updated) {
-        supabase
-          .from('itineraries')
-          .update({
-            data: { days: updated.days, transitSegments: updated.transitSegments },
-          })
-          .eq('id', currentId)
-          .then(({ error }) => {
-            if (error) console.error('Error syncing event:', error);
-          });
-      }
+      if (updated) syncToSupabase(currentId, updated);
 
       return { itineraries: updatedItineraries };
     });
@@ -441,19 +424,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
           : it
       );
 
-      // Sync with Supabase
       const updated = updatedItineraries.find((it) => it.id === currentId);
-      if (updated) {
-        supabase
-          .from('itineraries')
-          .update({
-            data: { days: updated.days, transitSegments: updated.transitSegments },
-          })
-          .eq('id', currentId)
-          .then(({ error }) => {
-            if (error) console.error('Error syncing event update:', error);
-          });
-      }
+      if (updated) syncToSupabase(currentId, updated);
 
       return { itineraries: updatedItineraries };
     });
@@ -478,19 +450,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
           : it
       );
 
-      // Sync with Supabase
       const updated = updatedItineraries.find((it) => it.id === currentId);
-      if (updated) {
-        supabase
-          .from('itineraries')
-          .update({
-            data: { days: updated.days, transitSegments: updated.transitSegments },
-          })
-          .eq('id', currentId)
-          .then(({ error }) => {
-            if (error) console.error('Error syncing event deletion:', error);
-          });
-      }
+      if (updated) syncToSupabase(currentId, updated);
 
       return { itineraries: updatedItineraries };
     });
@@ -523,19 +484,8 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
           : it
       );
 
-      // Sync with Supabase
       const updated = updatedItineraries.find((it) => it.id === currentId);
-      if (updated) {
-        supabase
-          .from('itineraries')
-          .update({
-            data: { days: updated.days, transitSegments: updated.transitSegments },
-          })
-          .eq('id', currentId)
-          .then(({ error }) => {
-            if (error) console.error('Error syncing checklist toggle:', error);
-          });
-      }
+      if (updated) syncToSupabase(currentId, updated);
 
       return { itineraries: updatedItineraries };
     });

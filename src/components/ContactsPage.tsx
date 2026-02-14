@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import ContactsList from './ContactsList';
+import { toast } from './Toast';
 
 type SortOption = 'dateMet' | 'firstName' | 'lastName';
 
@@ -47,7 +48,7 @@ export default function ContactsPage() {
 
   const exportToCSV = () => {
     if (filteredAndSortedContacts.length === 0) {
-      alert('No contacts to export');
+      toast.info('No contacts to export');
       return;
     }
 
@@ -147,6 +148,7 @@ export default function ContactsPage() {
                 <button
                   onClick={() => setSearchQuery('')}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  aria-label="Clear search"
                 >
                   <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
