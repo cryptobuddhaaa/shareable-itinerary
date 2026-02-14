@@ -2,8 +2,10 @@
  * Vercel Serverless Function: Fetch Luma events from Google Calendar
  * POST /api/google-calendar/luma-events
  *
- * Filters Google Calendar events to only return those organized by Luma
- * (organizer email: calendar-invite@lu.ma)
+ * Filters Google Calendar events to only return those organized by Luma.
+ * Detection methods:
+ *   1. Organizer email is calendar-invite@lu.ma (or contains lu.ma)
+ *   2. Event description contains a https://lu.ma/ or https://luma.com/event/ link
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -21,6 +23,7 @@ interface GoogleCalendarItem {
 }
 
 const LUMA_ORGANIZER_EMAIL = 'calendar-invite@lu.ma';
+const LUMA_DESCRIPTION_PATTERN = /https?:\/\/(?:lu\.ma\/|luma\.com\/event\/)/i;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
@@ -74,15 +77,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await calendarResponse.json();
     const allEvents: GoogleCalendarItem[] = data.items || [];
 
-    // Filter to only Luma events (organizer email matches)
+    // Filter to only Luma events
     const lumaEvents = allEvents.filter((event) => {
+      // Check 1: organizer email matches lu.ma
       const organizerEmail = event.organizer?.email?.toLowerCase();
-      const isLuma = organizerEmail === LUMA_ORGANIZER_EMAIL.toLowerCase();
+      if (organizerEmail === LUMA_ORGANIZER_EMAIL.toLowerCase() || organizerEmail?.includes('lu.ma')) {
+        return true;
+      }
 
-      // Also try matching if organizer email contains 'lu.ma'
-      const isLumaVariant = organizerEmail?.includes('lu.ma');
+      // Check 2: description contains a lu.ma or luma.com/event link
+      if (event.description && LUMA_DESCRIPTION_PATTERN.test(event.description)) {
+        return true;
+      }
 
-      return isLuma || isLumaVariant;
+      return false;
     });
 
 

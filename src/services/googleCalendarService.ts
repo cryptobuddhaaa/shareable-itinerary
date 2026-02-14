@@ -116,10 +116,10 @@ class GoogleCalendarService {
     const startTime = gcalEvent.start.dateTime || gcalEvent.start.date || '';
     const endTime = gcalEvent.end.dateTime || gcalEvent.end.date || '';
 
-    // Extract Luma URL from description if present
+    // Extract Luma URL from description if present (lu.ma/... or luma.com/event/...)
     let lumaEventUrl: string | undefined;
     if (gcalEvent.description) {
-      const lumaUrlMatch = gcalEvent.description.match(/https?:\/\/lu\.ma\/[^\s<>)]+/);
+      const lumaUrlMatch = gcalEvent.description.match(/https?:\/\/(?:lu\.ma\/[^\s<>)]+|luma\.com\/event\/[^\s<>)]+)/);
       if (lumaUrlMatch) {
         lumaEventUrl = lumaUrlMatch[0];
       }
