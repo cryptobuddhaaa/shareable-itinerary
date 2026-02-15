@@ -5,6 +5,18 @@
 
 import type { ItineraryEvent } from '../models/types';
 
+export interface LumaEventsDebugInfo {
+  totalCalendarEvents: number;
+  lumaEventsFound: number;
+  sampleEvents?: Array<{
+    summary: string;
+    organizer: string;
+    hasDescription: boolean;
+    descriptionSnippet: string | null;
+    attendeeEmails: string[];
+  }>;
+}
+
 export interface GoogleCalendarEvent {
   id: string;
   summary: string;
@@ -82,13 +94,12 @@ class GoogleCalendarService {
 
   /**
    * Fetches Luma events from Google Calendar
-   * Only returns events where organizer email is "calendar-invite@lu.ma"
    */
   async fetchLumaEvents(
     accessToken: string,
     timeMin?: string,
     timeMax?: string
-  ): Promise<GoogleCalendarEvent[]> {
+  ): Promise<{ events: GoogleCalendarEvent[]; debug?: LumaEventsDebugInfo }> {
     const response = await fetch('/api/google-calendar/luma-events', {
       method: 'POST',
       headers: {
@@ -106,7 +117,11 @@ class GoogleCalendarService {
       throw new Error(error.error || 'Failed to fetch Luma events');
     }
 
-    return response.json();
+    const data = await response.json();
+    return {
+      events: data.events || [],
+      debug: data.debug,
+    };
   }
 
   /**

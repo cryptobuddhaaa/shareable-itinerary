@@ -63,7 +63,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       timeMax.setHours(23, 59, 59, 999);
       const timeMaxISO = timeMax.toISOString();
 
-      const events = await googleCalendarService.fetchLumaEvents(
+      const { events, debug } = await googleCalendarService.fetchLumaEvents(
         accessToken,
         timeMin,
         timeMaxISO
@@ -77,7 +77,25 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
         const allEventIds = new Set(events.map((e) => e.id));
         setSelectedEvents(allEventIds);
       } else {
-        setError(`No Luma events found in your calendar between ${new Date(itinerary.startDate).toLocaleDateString()} and ${new Date(itinerary.endDate).toLocaleDateString()}. Make sure you have Luma events (from lu.ma) in this date range.`);
+        let errorMsg = `No Luma events found in your calendar between ${new Date(itinerary.startDate).toLocaleDateString()} and ${new Date(itinerary.endDate).toLocaleDateString()}.`;
+
+        if (debug && debug.totalCalendarEvents > 0) {
+          errorMsg += `\n\nFound ${debug.totalCalendarEvents} calendar event(s) in this range, but none matched Luma filters (organizer @lu.ma, attendee @lu.ma, or lu.ma/luma.com link in description).`;
+
+          if (debug.sampleEvents && debug.sampleEvents.length > 0) {
+            errorMsg += '\n\nSample events found:';
+            for (const sample of debug.sampleEvents) {
+              errorMsg += `\n• "${sample.summary}" — organizer: ${sample.organizer}, description: ${sample.hasDescription ? 'yes' : 'none'}`;
+              if (sample.descriptionSnippet) {
+                errorMsg += `\n  Snippet: ${sample.descriptionSnippet.substring(0, 100)}...`;
+              }
+            }
+          }
+        } else if (debug && debug.totalCalendarEvents === 0) {
+          errorMsg += '\n\nNo calendar events at all were found in this date range.';
+        }
+
+        setError(errorMsg);
       }
     } catch (err) {
       console.error('Error fetching Luma events:', err);
@@ -173,7 +191,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
           {error && (
             <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <p>{error}</p>
+              <pre className="whitespace-pre-wrap font-sans flex-1">{error}</pre>
             </div>
           )}
         </div>

@@ -101,9 +101,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Filter to only Luma events
     const lumaEvents = allEvents.filter(isLumaEvent);
 
+    // When no Luma events found, include diagnostic info to help debug
+    if (lumaEvents.length === 0 && allEvents.length > 0) {
+      const sampleEvents = allEvents.slice(0, 5).map((e) => ({
+        summary: e.summary,
+        organizer: e.organizer?.email || 'none',
+        hasDescription: !!e.description,
+        descriptionSnippet: e.description
+          ? e.description.substring(0, 200)
+          : null,
+        attendeeEmails: e.attendees?.map((a) => a.email).slice(0, 3) || [],
+      }));
 
+      return res.status(200).json({
+        events: [],
+        debug: {
+          totalCalendarEvents: allEvents.length,
+          lumaEventsFound: 0,
+          sampleEvents,
+        },
+      });
+    }
 
-    return res.status(200).json(lumaEvents);
+    return res.status(200).json({
+      events: lumaEvents,
+      debug: {
+        totalCalendarEvents: allEvents.length,
+        lumaEventsFound: lumaEvents.length,
+      },
+    });
   } catch (error) {
     console.error('Error in luma-events:', error);
     return res.status(500).json({ error: 'Internal server error' });
