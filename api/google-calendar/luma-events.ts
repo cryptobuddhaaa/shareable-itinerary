@@ -2,6 +2,7 @@
  * Vercel Serverless Function: Fetch Luma events from Google Calendar
  * POST /api/google-calendar/luma-events
  *
+ * Queries ALL calendars in the user's account (not just primary).
  * Filters Google Calendar events to only return those from Luma.
  * Detection methods (any match = Luma event):
  *   1. Organizer email is calendar-invite@lu.ma or contains lu.ma
@@ -22,6 +23,13 @@ interface GoogleCalendarItem {
   organizer?: { email: string; displayName?: string };
   htmlLink?: string;
   attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
+}
+
+interface CalendarListEntry {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  accessRole: string;
 }
 
 // Matches any luma.com path or lu.ma short links
@@ -54,6 +62,44 @@ function isLumaEvent(event: GoogleCalendarItem): boolean {
   return false;
 }
 
+async function fetchEventsFromCalendar(
+  calendarId: string,
+  accessToken: string,
+  timeMin?: string,
+  timeMax?: string
+): Promise<GoogleCalendarItem[]> {
+  const calendarApiUrl = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+  );
+
+  calendarApiUrl.searchParams.append('maxResults', '2500');
+  calendarApiUrl.searchParams.append('singleEvents', 'true');
+  calendarApiUrl.searchParams.append('orderBy', 'startTime');
+
+  if (timeMin) {
+    calendarApiUrl.searchParams.append('timeMin', timeMin);
+  }
+  if (timeMax) {
+    calendarApiUrl.searchParams.append('timeMax', timeMax);
+  }
+
+  const response = await fetch(calendarApiUrl.toString(), {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    // Log but don't fail — some calendars may not be accessible
+    console.warn(`Failed to fetch events from calendar ${calendarId}: ${response.status}`);
+    return [];
+  }
+
+  const data = await response.json();
+  return data.items || [];
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
   if (req.method !== 'POST') {
@@ -67,46 +113,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Access token is required' });
     }
 
-    // Build Google Calendar API URL
-    const calendarApiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+    // Step 1: Get list of all calendars
+    const calendarListResponse = await fetch(
+      'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+        },
+      }
+    );
 
-    // Add query parameters
-    calendarApiUrl.searchParams.append('maxResults', '2500');
-    calendarApiUrl.searchParams.append('singleEvents', 'true');
-    calendarApiUrl.searchParams.append('orderBy', 'startTime');
+    if (!calendarListResponse.ok) {
+      const error = await calendarListResponse.text();
+      console.error('Calendar list API error:', error);
 
-    if (timeMin) {
-      calendarApiUrl.searchParams.append('timeMin', timeMin);
-    }
-    if (timeMax) {
-      calendarApiUrl.searchParams.append('timeMax', timeMax);
-    }
-
-    // Fetch events from Google Calendar
-    const calendarResponse = await fetch(calendarApiUrl.toString(), {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!calendarResponse.ok) {
-      const error = await calendarResponse.text();
-      console.error('Google Calendar API error:', error);
-
-      if (calendarResponse.status === 401) {
+      if (calendarListResponse.status === 401) {
         return res.status(401).json({
           error: 'Access token expired or invalid. Please reconnect.',
         });
       }
 
-      return res.status(500).json({ error: 'Failed to fetch calendar events' });
+      return res.status(500).json({ error: 'Failed to fetch calendar list' });
     }
 
-    const data = await calendarResponse.json();
-    const allEvents: GoogleCalendarItem[] = data.items || [];
+    const calendarListData = await calendarListResponse.json();
+    const calendars: CalendarListEntry[] = calendarListData.items || [];
 
-    // Filter to only Luma events
+    // Step 2: Fetch events from all calendars in parallel
+    const eventsByCalendar = await Promise.all(
+      calendars.map(async (cal) => {
+        const events = await fetchEventsFromCalendar(cal.id, accessToken, timeMin, timeMax);
+        return { calendarId: cal.id, calendarName: cal.summary, events };
+      })
+    );
+
+    // Step 3: Merge all events, deduplicate by event ID
+    const seenIds = new Set<string>();
+    const allEvents: GoogleCalendarItem[] = [];
+    const calendarSources: string[] = [];
+
+    for (const { calendarName, events } of eventsByCalendar) {
+      if (events.length > 0) {
+        calendarSources.push(`${calendarName} (${events.length})`);
+      }
+      for (const event of events) {
+        if (!seenIds.has(event.id)) {
+          seenIds.add(event.id);
+          allEvents.push(event);
+        }
+      }
+    }
+
+    // Step 4: Filter to only Luma events
     const lumaEvents = allEvents.filter(isLumaEvent);
     const nonMatchingEvents = allEvents.filter((e) => !isLumaEvent(e));
 
@@ -124,6 +183,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       events: lumaEvents,
       debug: {
+        calendarsQueried: calendars.length,
+        calendarSources,
         totalCalendarEvents: allEvents.length,
         lumaEventsFound: lumaEvents.length,
         nonMatchingEvents: nonMatchingSamples,

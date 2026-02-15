@@ -6,6 +6,8 @@
 import type { ItineraryEvent } from '../models/types';
 
 export interface LumaEventsDebugInfo {
+  calendarsQueried: number;
+  calendarSources: string[];
   totalCalendarEvents: number;
   lumaEventsFound: number;
   nonMatchingEvents?: Array<{

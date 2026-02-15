@@ -72,6 +72,8 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       // Log debug info to help diagnose detection issues
       if (debug) {
         console.log('Luma import debug:', {
+          calendarsQueried: debug.calendarsQueried,
+          calendarSources: debug.calendarSources,
           totalCalendarEvents: debug.totalCalendarEvents,
           lumaEventsFound: debug.lumaEventsFound,
           nonMatchingEvents: debug.nonMatchingEvents,
