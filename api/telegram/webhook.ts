@@ -423,7 +423,16 @@ async function handleTextInput(
     contact[fieldConfig.field] = text.trim();
   }
 
-  await goToNextField(chatId, telegramUserId, { ...currentState.data, contact }, currentIndex);
+  const updatedData = { ...currentState.data, contact };
+
+  // If editing from confirmation, return to confirmation
+  if (currentState.data._editMode) {
+    delete (updatedData as Record<string, unknown>)._editMode;
+    await showConfirmation(chatId, telegramUserId, updatedData);
+    return;
+  }
+
+  await goToNextField(chatId, telegramUserId, updatedData, currentIndex);
 }
 
 async function handleSkip(
@@ -440,6 +449,29 @@ async function handleSkip(
   const contact = { ...(currentState.data.contact as Record<string, string>) };
 
   await goToNextField(chatId, telegramUserId, { ...currentState.data, contact }, currentIndex);
+}
+
+/** Handle edit button from confirmation — re-enter a specific field, then return to confirmation. */
+async function handleEdit(
+  chatId: number,
+  telegramUserId: number,
+  fieldIndex: number,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  if (fieldIndex < 0 || fieldIndex >= FIELD_FLOW.length) return;
+
+  const currentState = await getState(telegramUserId);
+  const field = FIELD_FLOW[fieldIndex];
+
+  // Set state to the edit target field, and remember to return to confirmation after
+  await setState(telegramUserId, field.state, {
+    ...currentState.data,
+    _editMode: true,
+  });
+
+  await sendMessage(chatId, `✏️ ${field.prompt}`);
 }
 
 // --- Confirmation & Save ---
@@ -470,6 +502,15 @@ async function showConfirmation(
         [
           { text: '✅ Confirm', callback_data: 'cf:yes' },
           { text: '❌ Cancel', callback_data: 'cf:no' },
+        ],
+        [
+          { text: '✏️ Telegram', callback_data: 'ed:0' },
+          { text: '✏️ Name', callback_data: 'ed:1' },
+          { text: '✏️ Company', callback_data: 'ed:3' },
+        ],
+        [
+          { text: '✏️ Position', callback_data: 'ed:4' },
+          { text: '✏️ Notes', callback_data: 'ed:5' },
         ],
       ],
     },
@@ -613,6 +654,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handleSkip(chatId, telegramUserId, cq.id);
       } else if (data.startsWith('cf:')) {
         await handleConfirmation(chatId, telegramUserId, data === 'cf:yes', cq.id);
+      } else if (data.startsWith('ed:')) {
+        const fieldIndex = parseInt(data.substring(3), 10);
+        await handleEdit(chatId, telegramUserId, fieldIndex, cq.id);
       }
     }
 
