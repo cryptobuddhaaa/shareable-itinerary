@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -42,6 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isTelegramMiniApp] = useState(() => getTelegramInitData() !== null);
+  // Guard: don't let onAuthStateChange set loading=false while Telegram auth is in progress
+  const telegramAuthInProgress = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session: existingSession } } = await supabase.auth.getSession();
 
       if (existingSession) {
+        console.log('[Auth] Existing session found');
         if (!cancelled) {
           setSession(existingSession);
           setUser(existingSession.user);
@@ -61,8 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // No existing session — check if we're in a Telegram Mini App
       const initData = getTelegramInitData();
+      console.log('[Auth] Telegram initData:', initData ? `present (${initData.length} chars)` : 'not available');
+
       if (initData) {
+        telegramAuthInProgress.current = true;
         try {
+          console.log('[Auth] Calling /api/auth/telegram...');
           const response = await fetch('/api/auth/telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -71,28 +78,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (!response.ok) {
             const errData = await response.json();
-            console.error('Telegram auth failed:', errData);
+            console.error('[Auth] Telegram auth failed:', errData);
             toast.error('Telegram authentication failed');
+            telegramAuthInProgress.current = false;
             if (!cancelled) setLoading(false);
             return;
           }
 
           const { token_hash } = await response.json();
+          console.log('[Auth] Got token_hash, verifying OTP...');
 
           // Verify the OTP token to establish a real Supabase session
-          const { error: otpError } = await supabase.auth.verifyOtp({
+          const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
             token_hash,
             type: 'magiclink',
           });
 
+          telegramAuthInProgress.current = false;
+
           if (otpError) {
-            console.error('OTP verification failed:', otpError);
+            console.error('[Auth] OTP verification failed:', otpError);
             toast.error('Failed to establish session');
+          } else {
+            console.log('[Auth] OTP verification succeeded, user:', otpData?.user?.id);
+            // Set session directly from verifyOtp response
+            if (!cancelled && otpData?.session) {
+              setSession(otpData.session);
+              setUser(otpData.session.user);
+            }
           }
-          // onAuthStateChange will pick up the new session
         } catch (err) {
-          console.error('Telegram auth error:', err);
+          console.error('[Auth] Telegram auth error:', err);
           toast.error('Telegram authentication failed');
+          telegramAuthInProgress.current = false;
         }
       }
 
@@ -103,14 +121,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initAuth();
 
-    // Listen for auth changes (covers both Google OAuth redirect and Telegram OTP verification)
+    // Listen for auth changes (covers Google OAuth redirect, token refresh, etc.)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!cancelled) {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        // Don't set loading=false if Telegram auth is still in progress
+        // (the INITIAL_SESSION event fires with null before Telegram auth completes)
+        if (!telegramAuthInProgress.current) {
+          setLoading(false);
+        }
       }
     });
 
