@@ -62,6 +62,46 @@ function padTime(text: string): string {
   return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
 }
 
+// --- Luma helpers ---
+const LUMA_URL_REGEX = /https?:\/\/(?:lu\.ma\/[^\s<>)]+|(?:www\.)?luma\.com\/(?:event\/)?[^\s<>)]+)/gi;
+
+function extractLumaUrls(text: string): string[] {
+  const matches = text.match(LUMA_URL_REGEX);
+  if (!matches) return [];
+  // Deduplicate and clean (strip trailing punctuation)
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (const raw of matches) {
+    const cleaned = raw.replace(/[.,;!?)]+$/, '');
+    if (!seen.has(cleaned)) {
+      seen.add(cleaned);
+      urls.push(cleaned);
+    }
+  }
+  return urls;
+}
+
+interface LumaEventData {
+  title: string;
+  startTime?: string;
+  endTime?: string;
+  location: { name: string; address?: string };
+  description?: string;
+}
+
+async function fetchLumaEvent(lumaUrl: string): Promise<LumaEventData | null> {
+  try {
+    const apiUrl = `${WEBAPP_URL}/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
+    const response = await fetch(apiUrl);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || !data.title) return null;
+    return data as LumaEventData;
+  } catch {
+    return null;
+  }
+}
+
 // --- Event type options ---
 const EVENT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'meeting', label: '🤝 Meeting' },
@@ -1094,8 +1134,10 @@ async function handleNewEventItSelection(
     return;
   }
 
-  // Build day selection keyboard
-  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+  // Build day selection keyboard — "Import via Luma Link" at the top
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
+    [{ text: '🔗 Import via Luma Link', callback_data: 'xl:import' }],
+  ];
   for (const day of days.slice(0, 30)) {
     const d = new Date(day.date);
     const label = d.toLocaleDateString('en-US', {
@@ -1111,9 +1153,15 @@ async function handleNewEventItSelection(
     }]);
   }
 
+  // Store itinerary date range for Luma import validation
+  const itStartDate = days[0]?.date;
+  const itEndDate = days[days.length - 1]?.date;
+
   await setState(telegramUserId, 'new_ev_select_day', {
     itineraryId: itinerary.id,
     itineraryTitle: itinerary.title,
+    itStartDate,
+    itEndDate,
   });
 
   await sendMessage(
@@ -1121,6 +1169,212 @@ async function handleNewEventItSelection(
     `📅 Select a day from <b>${itinerary.title}</b>:`,
     { reply_markup: { inline_keyboard: keyboard } }
   );
+}
+
+async function handleLumaImportSelect(
+  chatId: number,
+  telegramUserId: number,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const currentState = await getState(telegramUserId);
+
+  await setState(telegramUserId, 'new_ev_luma_input', {
+    ...currentState.data,
+  });
+
+  await sendMessage(
+    chatId,
+    '🔗 <b>Import via Luma Link</b>\n\n' +
+      'Paste one or more Luma event links.\n' +
+      'I\'ll automatically detect the date and add each event to the right day.\n\n' +
+      '<i>e.g. https://lu.ma/abc123</i>\n\n' +
+      'You can paste multiple links in a single message.',
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'xc:no' }]],
+      },
+    }
+  );
+}
+
+async function handleLumaInput(
+  chatId: number,
+  telegramUserId: number,
+  text: string,
+  currentState: BotState
+) {
+  const urls = extractLumaUrls(text);
+
+  if (urls.length === 0) {
+    await sendMessage(
+      chatId,
+      '❌ No Luma links found. Please paste a valid lu.ma or luma.com URL.\n\n' +
+        '<i>e.g. https://lu.ma/abc123</i>'
+    );
+    return;
+  }
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  const itineraryId = currentState.data.itineraryId as string;
+  const itineraryTitle = currentState.data.itineraryTitle as string;
+  const itStartDate = currentState.data.itStartDate as string;
+  const itEndDate = currentState.data.itEndDate as string;
+
+  await sendMessage(chatId, `🔄 Fetching ${urls.length} Luma event${urls.length > 1 ? 's' : ''}...`);
+
+  // Fetch current itinerary data
+  const { data: itinerary } = await supabase
+    .from('itineraries')
+    .select('data')
+    .eq('id', itineraryId)
+    .eq('user_id', userId)
+    .single();
+
+  if (!itinerary) {
+    await clearState(telegramUserId);
+    await sendMessage(chatId, '❌ Itinerary not found. It may have been deleted.');
+    return;
+  }
+
+  const itData = itinerary.data as {
+    days: Array<{
+      date: string;
+      dayNumber: number;
+      events: Array<Record<string, unknown>>;
+      checklist: unknown[];
+      goals: unknown[];
+    }>;
+    transitSegments: unknown[];
+  };
+
+  // Count current events for limit check
+  let totalEvents = 0;
+  for (const day of itData.days) {
+    totalEvents += day.events.length;
+  }
+
+  const results: string[] = [];
+  let addedCount = 0;
+
+  for (const url of urls) {
+    // Check event limit
+    if (totalEvents + addedCount >= 20) {
+      results.push(`⏭ <b>Skipped</b> — event limit reached (20 max)`);
+      break;
+    }
+
+    const eventData = await fetchLumaEvent(url);
+    if (!eventData) {
+      results.push(`❌ Could not fetch event from:\n${url}`);
+      continue;
+    }
+
+    if (!eventData.startTime) {
+      results.push(`❌ <b>${eventData.title}</b> — no date/time found`);
+      continue;
+    }
+
+    // Parse the event's date
+    const eventStart = new Date(eventData.startTime);
+    if (isNaN(eventStart.getTime())) {
+      results.push(`❌ <b>${eventData.title}</b> — invalid date`);
+      continue;
+    }
+
+    const eventDateStr = eventStart.toISOString().split('T')[0];
+
+    // Check if event falls within itinerary date range
+    if (eventDateStr < itStartDate || eventDateStr > itEndDate) {
+      const fmtDate = eventStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      results.push(
+        `⏭ <b>${eventData.title}</b> — ${fmtDate} is outside the trip dates (${itStartDate} to ${itEndDate})`
+      );
+      continue;
+    }
+
+    // Find the matching day
+    const dayIndex = itData.days.findIndex((d) => d.date === eventDateStr);
+    if (dayIndex === -1) {
+      results.push(`⏭ <b>${eventData.title}</b> — no matching day found`);
+      continue;
+    }
+
+    // Build the event object
+    const eventEnd = eventData.endTime ? new Date(eventData.endTime) : null;
+    const startTimeStr = `${eventStart.getUTCHours().toString().padStart(2, '0')}:${eventStart.getUTCMinutes().toString().padStart(2, '0')}`;
+    const endTimeStr = eventEnd
+      ? `${eventEnd.getUTCHours().toString().padStart(2, '0')}:${eventEnd.getUTCMinutes().toString().padStart(2, '0')}`
+      : startTimeStr;
+
+    const newEvent = {
+      id: crypto.randomUUID(),
+      title: eventData.title,
+      startTime: `${eventDateStr}T${startTimeStr}:00`,
+      endTime: `${eventDateStr}T${endTimeStr}:00`,
+      location: {
+        name: eventData.location?.name || '',
+        address: eventData.location?.address || '',
+      },
+      eventType: 'side-event',
+      lumaEventUrl: url,
+      notes: [],
+      checklist: [],
+    };
+
+    // Add and sort
+    itData.days[dayIndex].events.push(newEvent);
+    itData.days[dayIndex].events.sort((a, b) => {
+      const aTime = (a.startTime as string) || '';
+      const bTime = (b.startTime as string) || '';
+      return aTime.localeCompare(bTime);
+    });
+
+    addedCount++;
+
+    const fmtDate = eventStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    results.push(`✅ <b>${eventData.title}</b> — added to ${fmtDate} (${startTimeStr}–${endTimeStr})`);
+  }
+
+  // Save if any events were added
+  if (addedCount > 0) {
+    const { error } = await supabase
+      .from('itineraries')
+      .update({ data: itData })
+      .eq('id', itineraryId)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error saving Luma events:', error);
+      await clearState(telegramUserId);
+      await sendMessage(chatId, '❌ Failed to save events. Please try again.');
+      return;
+    }
+  }
+
+  let summary = `<b>🔗 Luma Import — ${itineraryTitle}</b>\n\n`;
+  summary += results.join('\n\n');
+  summary += `\n\n${addedCount > 0 ? `${addedCount} event${addedCount !== 1 ? 's' : ''} added.` : 'No events were added.'}`;
+  summary += '\n\nPaste more Luma links to continue importing, or use /cancel to stop.';
+
+  // Stay in luma input state so user can keep pasting links
+  await setState(telegramUserId, 'new_ev_luma_input', {
+    itineraryId,
+    itineraryTitle,
+    itStartDate,
+    itEndDate,
+  });
+
+  await sendMessage(chatId, summary, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+      ],
+    },
+  });
 }
 
 async function handleNewEventDaySelection(
@@ -1192,6 +1446,13 @@ async function handleEventTextInput(
   currentState: BotState
 ) {
   const state = currentState.state;
+
+  // Handle Luma link input separately
+  if (state === 'new_ev_luma_input') {
+    await handleLumaInput(chatId, telegramUserId, text, currentState);
+    return;
+  }
+
   const eventData = { ...(currentState.data.event as Record<string, string> || {}) };
   const baseData = { ...currentState.data, event: eventData };
 
@@ -1590,6 +1851,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // --- Event creation callbacks ---
       else if (data.startsWith('xi:')) {
         await handleNewEventItSelection(chatId, telegramUserId, data.substring(3), cq.id);
+      } else if (data.startsWith('xl:')) {
+        await handleLumaImportSelect(chatId, telegramUserId, cq.id);
       } else if (data.startsWith('xd:')) {
         await handleNewEventDaySelection(chatId, telegramUserId, data.substring(3), cq.id);
       } else if (data.startsWith('xt:')) {
