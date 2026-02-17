@@ -86,10 +86,26 @@ export interface Contact {
   email?: string;
   linkedin?: string;
   notes?: string;
+  tags?: string[]; // Tag names assigned to this contact (max 3)
   eventTitle?: string; // Denormalized from event for easier display
   lumaEventUrl?: string; // Luma URL from the event (denormalized)
   dateMet?: string; // ISO8601 date
   lastContactedAt?: string | null; // ISO8601 datetime — when user last reached out
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime
+}
+
+export interface UserTag {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface ContactNote {
+  id: string;
+  contactId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
 }

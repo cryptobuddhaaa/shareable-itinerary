@@ -226,11 +226,11 @@ async function handleStart(
           '/newevent — Add events (or paste Luma links)\n\n' +
           '👥 <b>Manage contacts</b>\n' +
           '/newcontact — Add a contact\n' +
-          '/contacts — Browse contacts & DM them\n' +
+          '/contacts — Browse contacts by trip or event\n' +
           '/contacted @handle — Log a follow-up\n\n' +
           '💡 <b>Quick actions</b>\n' +
-          '• <b>Forward a message</b> → instantly files the sender as a contact\n' +
-          '• Use <b>Invite</b> in the web app to bulk-message contacts\n\n' +
+          '• <b>Forward a message</b> → adds a note if the contact exists, or creates a new contact\n' +
+          '• Tag and annotate contacts in the web app\n\n' +
           'Use /help for the full command list.',
         {
           reply_markup: {
@@ -248,7 +248,8 @@ async function handleStart(
           '✈️ Create and manage trip itineraries\n' +
           '📅 Import events from Luma links\n' +
           '👥 Track contacts you meet at events\n' +
-          '💬 Follow up with contacts via Telegram DMs\n' +
+          '🏷 Tag and add notes to contacts\n' +
+          '💬 Follow up via Telegram DMs\n' +
           '📨 Bulk-invite contacts from the web app\n\n' +
           'Tap <b>Open App</b> to get started, or link an existing account from the web app → Contacts → Link Telegram.',
         {
@@ -300,8 +301,8 @@ async function handleStart(
       '/newitinerary — Create a trip\n' +
       '/newevent — Add events (or paste Luma links)\n' +
       '/newcontact — Add a contact\n' +
-      '/contacts — Browse & DM your contacts\n\n' +
-      '💡 Forward a message from someone to quickly save them as a contact!\n\n' +
+      '/contacts — Browse contacts by trip or event\n\n' +
+      '💡 Forward a message from someone → saves them as a contact, or adds a note if they already exist!\n\n' +
       'Use /help for the full command list.'
   );
 }
@@ -1853,6 +1854,64 @@ async function handleForwardedMessage(
     return;
   }
 
+  // Check if this person is already in the user's contacts
+  const handleNorm = telegramHandle ? telegramHandle.replace('@', '').toLowerCase() : '';
+  let existingContact: Record<string, unknown> | null = null;
+
+  if (handleNorm) {
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, telegram_handle')
+      .eq('user_id', userId)
+      .ilike('telegram_handle', `%${handleNorm}%`)
+      .limit(1)
+      .single();
+    if (data) existingContact = data;
+  }
+
+  if (!existingContact) {
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, telegram_handle')
+      .eq('user_id', userId)
+      .ilike('first_name', firstName)
+      .ilike('last_name', lastName || '')
+      .limit(1)
+      .single();
+    if (data) existingContact = data;
+  }
+
+  if (existingContact) {
+    // Contact exists — offer to add a note instead
+    const cName = `${existingContact.first_name} ${existingContact.last_name || ''}`.trim();
+    const msgText = msg.text as string || msg.caption as string || '';
+    const preview = msgText ? msgText.substring(0, 100) : '(forwarded message)';
+
+    await setState(telegramUserId, 'forward_note_choice', {
+      contactId: existingContact.id,
+      contactName: cName,
+      noteContent: preview,
+      // Also store new contact data in case user wants to create a new one
+      _newContactData: { firstName, lastName, telegramHandle },
+    });
+
+    await sendMessage(chatId,
+      `<b>📋 ${cName}</b> is already in your contacts.\n\n` +
+      `Would you like to add a note from this message?\n` +
+      `📝 <i>"${preview}"</i>`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📝 Add as note', callback_data: 'fn:note' }],
+            [{ text: '👤 Create new contact anyway', callback_data: 'fn:new' }],
+            [{ text: '❌ Cancel', callback_data: 'fn:cancel' }],
+          ],
+        },
+      }
+    );
+    return;
+  }
+
   // Try to match the forward date to an itinerary event
   let matchedItineraryId: string | undefined;
   let matchedEventId: string | undefined;
@@ -2033,6 +2092,150 @@ async function handleForwardEventChoice(
 }
 
 // ============================================================
+// FORWARD NOTE CHOICE (fn: callbacks — existing contact found)
+// ============================================================
+
+async function handleForwardNoteChoice(
+  chatId: number,
+  telegramUserId: number,
+  choice: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const currentState = await getState(telegramUserId);
+  if (currentState.state !== 'forward_note_choice') {
+    await sendMessage(chatId, '❌ Session expired. Forward the message again.');
+    return;
+  }
+
+  if (choice === 'cancel') {
+    await clearState(telegramUserId);
+    await sendMessage(chatId, '❌ Cancelled. Use /help for commands.');
+    return;
+  }
+
+  if (choice === 'note') {
+    // Add the forwarded message as a note on the existing contact
+    const userId = await getLinkedUserId(telegramUserId);
+    if (!userId) return;
+
+    const contactId = currentState.data.contactId as string;
+    const contactName = currentState.data.contactName as string;
+    const noteContent = currentState.data.noteContent as string;
+
+    // Check note limit (max 10)
+    const { count } = await supabase
+      .from('contact_notes')
+      .select('id', { count: 'exact', head: true })
+      .eq('contact_id', contactId);
+
+    if (count !== null && count >= 10) {
+      await clearState(telegramUserId);
+      await sendMessage(chatId,
+        `⚠️ ${contactName} already has 10 notes (maximum). Delete some in the web app to add more.`
+      );
+      return;
+    }
+
+    const { error } = await supabase.from('contact_notes').insert({
+      contact_id: contactId,
+      user_id: userId,
+      content: noteContent,
+    });
+
+    await clearState(telegramUserId);
+
+    if (error) {
+      await sendMessage(chatId, '❌ Failed to save note. Please try again.');
+    } else {
+      await sendMessage(chatId,
+        `✅ Note added to <b>${contactName}</b>:\n📝 <i>"${noteContent}"</i>`
+      );
+    }
+    return;
+  }
+
+  if (choice === 'new') {
+    // User wants to create a new contact even though one exists
+    const newContactData = currentState.data._newContactData as Record<string, string> | undefined;
+    const firstName = newContactData?.firstName || '';
+    const lastName = newContactData?.lastName || '';
+    const telegramHandle = newContactData?.telegramHandle || '';
+
+    // Proceed with the normal forward-to-contact flow: event matching
+    // Re-use the existing forward message logic from handleForwardedMessage
+    // but skip duplicate detection
+    const userId = await getLinkedUserId(telegramUserId);
+    if (!userId) return;
+
+    // Try to match to an itinerary event by current date
+    const todayStr = new Date().toISOString().split('T')[0];
+    let matchedItineraryId: string | undefined;
+    let matchedEventId: string | undefined;
+    let matchedEventTitle: string | undefined;
+    let matchedEventDate: string | undefined;
+
+    const { data: itineraries } = await supabase
+      .from('itineraries')
+      .select('id, title, start_date, end_date, data')
+      .eq('user_id', userId)
+      .order('start_date', { ascending: false })
+      .limit(10);
+
+    if (itineraries) {
+      for (const it of itineraries) {
+        if (todayStr < it.start_date || todayStr > it.end_date) continue;
+        const itData = it.data as { days?: Array<{ date: string; events?: Array<{ id: string; title: string; startTime: string }> }> };
+        for (const day of itData.days || []) {
+          if (day.date !== todayStr) continue;
+          if (day.events && day.events.length > 0) {
+            const ev = day.events[0];
+            matchedItineraryId = it.id;
+            matchedEventId = ev.id;
+            matchedEventTitle = ev.title;
+            matchedEventDate = day.date;
+          }
+          break;
+        }
+        if (matchedEventId) break;
+      }
+    }
+
+    const stateData: Record<string, unknown> = {
+      firstName,
+      lastName,
+      telegramHandle: telegramHandle || undefined,
+      _forwardMode: true,
+    };
+    if (matchedItineraryId) stateData.itineraryId = matchedItineraryId;
+    if (matchedEventId) stateData.eventId = matchedEventId;
+    if (matchedEventTitle) stateData.eventTitle = matchedEventTitle;
+    if (matchedEventDate) stateData.eventDate = matchedEventDate;
+
+    if (matchedEventId) {
+      await setState(telegramUserId, 'forward_event_choice', stateData);
+      await sendMessage(chatId,
+        `📅 Matched event: <b>${matchedEventTitle}</b> (${matchedEventDate})\n\nIs this the right event?`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✅ Yes, use this event', callback_data: 'fw:yes' }],
+              [{ text: '🔄 Pick a different event', callback_data: 'fw:pick' }],
+              [{ text: '➖ No event', callback_data: 'fw:none' }],
+              [{ text: '❌ Cancel', callback_data: 'fw:cancel' }],
+            ],
+          },
+        }
+      );
+    } else {
+      await showContactConfirmation(chatId, telegramUserId, stateData);
+    }
+    return;
+  }
+}
+
+// ============================================================
 // CONTACTS LIST & FOLLOW-UP (/contacts, /contacted)
 // ============================================================
 
@@ -2197,7 +2400,7 @@ async function showContactsList(
 ) {
   let query = supabase
     .from('contacts')
-    .select('first_name, last_name, telegram_handle, project_company, event_title, last_contacted_at')
+    .select('first_name, last_name, telegram_handle, project_company, event_title, last_contacted_at, tags')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -2238,6 +2441,11 @@ async function showContactsList(
 
     if (c.event_title) {
       message += `    📍 ${c.event_title}\n`;
+    }
+
+    const cTags = Array.isArray(c.tags) ? c.tags as string[] : [];
+    if (cTags.length > 0) {
+      message += `    🏷 ${cTags.join(', ')}\n`;
     }
 
     message += '\n';
@@ -2419,15 +2627,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '/newevent — Add an event to a trip (manual or Luma import)\n\n' +
             '👥 <b>Contact Management</b>\n' +
             '/newcontact — Add a contact linked to a trip/event\n' +
-            '/contacts — Browse your contacts with quick DM links\n' +
+            '/contacts — Browse contacts by trip, event, or all\n' +
             '/contacted @handle — Mark that you\'ve reached out to someone\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
-            '• <b>Forward a message</b> from anyone → auto-creates a contact with their info, matched to the closest event by date\n' +
-            '• <b>Paste Luma links</b> during /newevent → auto-detects dates and imports events to the right day\n\n' +
+            '• <b>Forward a message</b> → if the sender is already a contact, save it as a timestamped note; otherwise create a new contact\n' +
+            '• <b>Paste Luma links</b> during /newevent → auto-imports event details\n\n' +
+            '🏷 <b>Tags & Notes</b>\n' +
+            '• Tag contacts in the web app (e.g., investor, developer) and filter by tag\n' +
+            '• Add timestamped notes to track relationship history\n' +
+            '• Tags are visible when browsing /contacts\n\n' +
             '🌐 <b>Web App Features</b>\n' +
-            '• <b>Invite</b> — Bulk-compose personalized messages, then copy & DM each contact\n' +
-            '• <b>Export CSV</b> — Download all contacts as a spreadsheet\n' +
-            '• Sort contacts by date met, last contacted, or name\n\n' +
+            '• <b>Invite</b> — Bulk-compose personalized messages\n' +
+            '• <b>Export CSV</b> — Download contacts as a spreadsheet\n' +
+            '• Search, sort, and filter contacts by tags or text\n\n' +
             '/cancel — Cancel current operation',
           {
             reply_markup: {
@@ -2485,6 +2697,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // --- Forward event choice callbacks ---
       else if (data.startsWith('fw:')) {
         await handleForwardEventChoice(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Forward note choice callbacks (existing contact found) ---
+      else if (data.startsWith('fn:')) {
+        await handleForwardNoteChoice(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Contacts list callbacks ---
       else if (data.startsWith('cl:')) {

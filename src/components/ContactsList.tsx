@@ -220,6 +220,16 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </div>
               )}
 
+              {contact.tags && contact.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {contact.tags.map((tag) => (
+                    <span key={tag} className="px-1.5 py-0.5 text-xs rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/50">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {contact.notes && (
                 <div className="mt-2 text-sm text-slate-400 italic">
                   "{contact.notes}"

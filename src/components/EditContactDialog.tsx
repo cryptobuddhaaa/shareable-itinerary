@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { useContacts } from '../hooks/useContacts';
 import { useItinerary } from '../hooks/useItinerary';
 import { CreateContactSchema } from '../lib/validation';
-import type { Contact, ItineraryEvent } from '../models/types';
+import type { Contact, ContactNote, ItineraryEvent } from '../models/types';
+import { toast } from './Toast';
 
 interface EditContactDialogProps {
   contact: Contact;
@@ -11,7 +12,7 @@ interface EditContactDialogProps {
 }
 
 export default function EditContactDialog({ contact, onClose }: EditContactDialogProps) {
-  const { updateContact } = useContacts();
+  const { updateContact, tags, fetchNotes, addNote, deleteNote } = useContacts();
   const { itineraries } = useItinerary();
   const [firstName, setFirstName] = useState(contact.firstName);
   const [lastName, setLastName] = useState(contact.lastName);
@@ -21,11 +22,24 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
   const [email, setEmail] = useState(contact.email || '');
   const [linkedin, setLinkedin] = useState(contact.linkedin || '');
   const [notes, setNotes] = useState(contact.notes || '');
+  const [selectedTags, setSelectedTags] = useState<string[]>(contact.tags || []);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showLinkEvent, setShowLinkEvent] = useState(false);
   const [selectedItineraryId, setSelectedItineraryId] = useState(contact.itineraryId || '');
   const [selectedEventId, setSelectedEventId] = useState(contact.eventId || '');
+
+  // Notes timeline
+  const [contactNotes, setContactNotes] = useState<ContactNote[]>([]);
+  const [newNote, setNewNote] = useState('');
+  const [notesLoading, setNotesLoading] = useState(true);
+
+  useEffect(() => {
+    fetchNotes(contact.id).then((n) => {
+      setContactNotes(n);
+      setNotesLoading(false);
+    }).catch(() => setNotesLoading(false));
+  }, [contact.id, fetchNotes]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -82,6 +96,7 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
         email: validated.email,
         linkedin: validated.linkedin,
         notes: validated.notes,
+        tags: selectedTags,
       };
 
       // Include event linking updates if changed
@@ -305,6 +320,41 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
               {errors.notes && <p className="mt-1 text-sm text-red-400">{errors.notes}</p>}
             </div>
 
+            {/* Tags */}
+            {tags.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Tags <span className="text-slate-500 text-xs">({selectedTags.length}/3)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag.name);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedTags(selectedTags.filter((t) => t !== tag.name));
+                          } else if (selectedTags.length < 3) {
+                            setSelectedTags([...selectedTags, tag.name]);
+                          }
+                        }}
+                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                          isSelected
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'border-slate-600 text-slate-300 hover:border-slate-500'
+                        } ${!isSelected && selectedTags.length >= 3 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        disabled={!isSelected && selectedTags.length >= 3}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Link to Event section */}
             <div className="border-t border-slate-700 pt-4">
               {!showLinkEvent && !contact.eventId ? (
@@ -356,6 +406,87 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
                   )}
                 </div>
               ) : null}
+            </div>
+
+            {/* Notes Timeline */}
+            <div className="border-t border-slate-700 pt-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Notes Timeline <span className="text-slate-500 text-xs">({contactNotes.length}/10)</span>
+              </label>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!newNote.trim() || contactNotes.length >= 10) return;
+                      try {
+                        const note = await addNote(contact.id, newNote);
+                        setContactNotes([note, ...contactNotes]);
+                        setNewNote('');
+                      } catch {
+                        toast.error('Failed to add note');
+                      }
+                    }
+                  }}
+                  placeholder="Add a note..."
+                  maxLength={200}
+                  className="flex-1 px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  disabled={contactNotes.length >= 10}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newNote.trim() || contactNotes.length >= 10) return;
+                    try {
+                      const note = await addNote(contact.id, newNote);
+                      setContactNotes([note, ...contactNotes]);
+                      setNewNote('');
+                    } catch {
+                      toast.error('Failed to add note');
+                    }
+                  }}
+                  disabled={!newNote.trim() || contactNotes.length >= 10}
+                  className="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+              {notesLoading ? (
+                <p className="text-xs text-slate-500">Loading notes...</p>
+              ) : contactNotes.length === 0 ? (
+                <p className="text-xs text-slate-500">No notes yet. Add timestamped notes to track your relationship.</p>
+              ) : (
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {contactNotes.map((note) => (
+                    <div key={note.id} className="flex items-start gap-2 text-sm">
+                      <span className="text-xs text-slate-500 whitespace-nowrap mt-0.5">
+                        {new Date(note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                      <span className="text-slate-300 flex-1">{note.content}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await deleteNote(note.id);
+                            setContactNotes(contactNotes.filter((n) => n.id !== note.id));
+                          } catch {
+                            toast.error('Failed to delete note');
+                          }
+                        }}
+                        className="text-slate-500 hover:text-red-400 flex-shrink-0"
+                        aria-label="Delete note"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">

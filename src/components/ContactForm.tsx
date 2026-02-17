@@ -20,7 +20,7 @@ export default function ContactForm({
   dateMet,
   onClose,
 }: ContactFormProps) {
-  const { addContact } = useContacts();
+  const { addContact, tags, findDuplicates } = useContacts();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [projectCompany, setProjectCompany] = useState('');
@@ -29,8 +29,11 @@ export default function ContactForm({
   const [email, setEmail] = useState('');
   const [linkedin, setLinkedin] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -67,6 +70,17 @@ export default function ContactForm({
         notes: notes || undefined,
       });
 
+      // Duplicate detection
+      if (!duplicateConfirmed) {
+        const dupes = findDuplicates(validated.firstName, validated.lastName, validated.telegramHandle, validated.email);
+        if (dupes.length > 0) {
+          const names = dupes.map((d) => `${d.firstName} ${d.lastName}${d.telegramHandle ? ` (${d.telegramHandle})` : ''}`).join(', ');
+          setDuplicateWarning(`Possible duplicate: ${names}. Save anyway?`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       await addContact({
         itineraryId,
         eventId,
@@ -81,6 +95,7 @@ export default function ContactForm({
         email: validated.email,
         linkedin: validated.linkedin,
         notes: validated.notes,
+        tags: selectedTags,
       });
 
       onClose();
@@ -285,6 +300,67 @@ export default function ContactForm({
               />
               {errors.notes && <p className="mt-1 text-sm text-red-400">{errors.notes}</p>}
             </div>
+
+            {/* Tags */}
+            {tags.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Tags <span className="text-slate-500 text-xs">({selectedTags.length}/3)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag.name);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedTags(selectedTags.filter((t) => t !== tag.name));
+                          } else if (selectedTags.length < 3) {
+                            setSelectedTags([...selectedTags, tag.name]);
+                          }
+                        }}
+                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                          isSelected
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'border-slate-600 text-slate-300 hover:border-slate-500'
+                        } ${!isSelected && selectedTags.length >= 3 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        disabled={!isSelected && selectedTags.length >= 3}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Duplicate warning */}
+            {duplicateWarning && (
+              <div className="bg-yellow-900/30 border border-yellow-700 text-yellow-300 px-4 py-3 rounded text-sm">
+                <p>{duplicateWarning}</p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDuplicateConfirmed(true);
+                      setDuplicateWarning(null);
+                    }}
+                    className="px-2 py-1 text-xs bg-yellow-700 text-white rounded hover:bg-yellow-600"
+                  >
+                    Save Anyway
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateWarning(null)}
+                    className="px-2 py-1 text-xs border border-yellow-700 text-yellow-300 rounded hover:bg-yellow-900/50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 mt-6">
               <button

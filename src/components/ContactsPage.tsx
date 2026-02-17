@@ -13,14 +13,17 @@ import {
 type SortOption = 'dateMet' | 'firstName' | 'lastName' | 'lastContacted';
 
 export default function ContactsPage() {
-  const { contacts } = useContacts();
+  const { contacts, tags, addTag, deleteTag } = useContacts();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('dateMet');
+  const [filterTag, setFilterTag] = useState<string | null>(null);
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string>();
   const [linkLoading, setLinkLoading] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
 
   useEffect(() => {
     getTelegramLinkStatus().then((status) => {
@@ -66,9 +69,37 @@ export default function ContactsPage() {
     }
   };
 
+  const handleAddTag = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    try {
+      await addTag(name);
+      setNewTagName('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add tag';
+      toast.error(msg.includes('LIMIT_REACHED') ? msg.split(':')[1] : msg.includes('duplicate') ? 'Tag already exists' : msg);
+    }
+  };
+
+  const handleDeleteTag = async (tagId: string) => {
+    try {
+      await deleteTag(tagId);
+      // Clear filter if the deleted tag was active
+      const deleted = tags.find((t) => t.id === tagId);
+      if (deleted && filterTag === deleted.name) setFilterTag(null);
+    } catch {
+      toast.error('Failed to delete tag');
+    }
+  };
+
   // Filter and sort contacts
   const filteredAndSortedContacts = useMemo(() => {
     let result = [...contacts];
+
+    // Apply tag filter
+    if (filterTag) {
+      result = result.filter((c) => c.tags?.includes(filterTag));
+    }
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -81,7 +112,8 @@ export default function ContactsPage() {
           contact.position?.toLowerCase().includes(query) ||
           contact.eventTitle?.toLowerCase().includes(query) ||
           contact.email?.toLowerCase().includes(query) ||
-          contact.telegramHandle?.toLowerCase().includes(query)
+          contact.telegramHandle?.toLowerCase().includes(query) ||
+          contact.tags?.some((t) => t.toLowerCase().includes(query))
       );
     }
 
@@ -106,7 +138,7 @@ export default function ContactsPage() {
     });
 
     return result;
-  }, [contacts, searchQuery, sortBy]);
+  }, [contacts, searchQuery, sortBy, filterTag]);
 
   const exportToCSV = () => {
     if (filteredAndSortedContacts.length === 0) {
@@ -289,6 +321,85 @@ export default function ContactsPage() {
               <option value="lastName">Sort by Last Name</option>
             </select>
           </div>
+        </div>
+      )}
+
+      {/* Tag filter chips */}
+      {contacts.length > 0 && tags.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-400">Tags:</span>
+          <button
+            onClick={() => setFilterTag(null)}
+            className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+              !filterTag
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'border-slate-600 text-slate-300 hover:border-slate-500'
+            }`}
+          >
+            All
+          </button>
+          {tags.map((tag) => (
+            <button
+              key={tag.id}
+              onClick={() => setFilterTag(filterTag === tag.name ? null : tag.name)}
+              className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                filterTag === tag.name
+                  ? 'bg-blue-600 border-blue-500 text-white'
+                  : 'border-slate-600 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              {tag.name}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowTagManager(!showTagManager)}
+            className="px-2 py-0.5 text-xs rounded-full border border-dashed border-slate-500 text-slate-400 hover:text-slate-200 hover:border-slate-400"
+          >
+            {showTagManager ? 'Done' : 'Manage'}
+          </button>
+        </div>
+      )}
+
+      {/* Tag manager (create/delete) */}
+      {contacts.length > 0 && (showTagManager || tags.length === 0) && (
+        <div className="mb-4 p-3 bg-slate-800 border border-slate-700 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="text"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddTag(); }}
+              placeholder="New tag name..."
+              maxLength={20}
+              className="flex-1 px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleAddTag}
+              disabled={!newTagName.trim() || tags.length >= 10}
+              className="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+            <span className="text-xs text-slate-500">{tags.length}/10</span>
+          </div>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.map((tag) => (
+                <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300 border border-slate-600">
+                  {tag.name}
+                  <button
+                    onClick={() => handleDeleteTag(tag.id)}
+                    className="text-slate-500 hover:text-red-400"
+                    aria-label={`Delete tag ${tag.name}`}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
