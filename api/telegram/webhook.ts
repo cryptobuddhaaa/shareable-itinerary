@@ -220,13 +220,18 @@ async function handleStart(
     if (linked) {
       await sendMessage(
         chatId,
-        '👋 Welcome back! Your account is linked.\n\n' +
-          'Use /newcontact to add a contact\n' +
-          'Use /newitinerary to create a trip\n' +
-          'Use /newevent to add an event\n' +
-          'Use /contacts to view contacts\n' +
-          'Forward a message to quick-add a contact\n\n' +
-          'Use /help for all commands.',
+        '👋 <b>Welcome back!</b> Your account is linked.\n\n' +
+          '📋 <b>Plan your trip</b>\n' +
+          '/newitinerary — Create a new trip\n' +
+          '/newevent — Add events (or paste Luma links)\n\n' +
+          '👥 <b>Manage contacts</b>\n' +
+          '/newcontact — Add a contact\n' +
+          '/contacts — Browse contacts & DM them\n' +
+          '/contacted @handle — Log a follow-up\n\n' +
+          '💡 <b>Quick actions</b>\n' +
+          '• <b>Forward a message</b> → instantly files the sender as a contact\n' +
+          '• Use <b>Invite</b> in the web app to bulk-message contacts\n\n' +
+          'Use /help for the full command list.',
         {
           reply_markup: {
             inline_keyboard: [
@@ -238,9 +243,14 @@ async function handleStart(
     } else {
       await sendMessage(
         chatId,
-        '👋 Welcome to Itinerary & Contact Manager!\n\n' +
-          'Tap <b>Open App</b> below to get started, or link an existing account from the web app.\n\n' +
-          'Use /help for all commands.',
+        '👋 <b>Welcome to Shareable Itinerary!</b>\n\n' +
+          'Your all-in-one trip planner and networking companion.\n\n' +
+          '✈️ Create and manage trip itineraries\n' +
+          '📅 Import events from Luma links\n' +
+          '👥 Track contacts you meet at events\n' +
+          '💬 Follow up with contacts via Telegram DMs\n' +
+          '📨 Bulk-invite contacts from the web app\n\n' +
+          'Tap <b>Open App</b> to get started, or link an existing account from the web app → Contacts → Link Telegram.',
         {
           reply_markup: {
             inline_keyboard: [
@@ -285,7 +295,14 @@ async function handleStart(
 
   await sendMessage(
     chatId,
-    '✅ Account linked successfully!\n\nUse /newcontact to add a new contact, /newitinerary to create a trip, or /newevent to add an event.'
+    '✅ <b>Account linked successfully!</b>\n\n' +
+      'You\'re all set. Here\'s what you can do:\n\n' +
+      '/newitinerary — Create a trip\n' +
+      '/newevent — Add events (or paste Luma links)\n' +
+      '/newcontact — Add a contact\n' +
+      '/contacts — Browse & DM your contacts\n\n' +
+      '💡 Forward a message from someone to quickly save them as a contact!\n\n' +
+      'Use /help for the full command list.'
   );
 }
 
@@ -2190,17 +2207,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (text === '/help') {
         await sendMessage(
           chatId,
-          '<b>Available commands:</b>\n\n' +
-            '📋 <b>Create</b>\n' +
-            '/newitinerary — Create a new trip\n' +
-            '/newevent — Add an event to a trip\n' +
-            '/newcontact — Add a new contact\n\n' +
-            '👥 <b>Contacts</b>\n' +
-            '/contacts — View your contacts with DM links\n' +
-            '/contacted @handle — Mark a contact as reached out\n\n' +
-            '💡 <b>Tips</b>\n' +
-            '• Forward a message from someone to quickly add them as a contact\n' +
-            '• Paste Luma links during event creation to auto-import\n\n' +
+          '<b>📖 Command Reference</b>\n\n' +
+            '📋 <b>Trip Planning</b>\n' +
+            '/newitinerary — Create a new trip with dates & location\n' +
+            '/newevent — Add an event to a trip (manual or Luma import)\n\n' +
+            '👥 <b>Contact Management</b>\n' +
+            '/newcontact — Add a contact linked to a trip/event\n' +
+            '/contacts — Browse your contacts with quick DM links\n' +
+            '/contacted @handle — Mark that you\'ve reached out to someone\n\n' +
+            '⚡ <b>Quick Actions</b>\n' +
+            '• <b>Forward a message</b> from anyone → auto-creates a contact with their info, matched to the closest event by date\n' +
+            '• <b>Paste Luma links</b> during /newevent → auto-detects dates and imports events to the right day\n\n' +
+            '🌐 <b>Web App Features</b>\n' +
+            '• <b>Invite</b> — Bulk-compose personalized messages, then copy & DM each contact\n' +
+            '• <b>Export CSV</b> — Download all contacts as a spreadsheet\n' +
+            '• Sort contacts by date met, last contacted, or name\n\n' +
             '/cancel — Cancel current operation',
           {
             reply_markup: {
