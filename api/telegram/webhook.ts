@@ -1296,6 +1296,18 @@ async function handleLumaInput(
       continue;
     }
 
+    // Check for duplicate — match by lumaEventUrl or same title on the same date
+    const isDuplicate = itData.days.some((day) =>
+      day.events.some((existing) =>
+        (existing.lumaEventUrl && existing.lumaEventUrl === url) ||
+        (day.date === eventDateStr && existing.title === eventData.title)
+      )
+    );
+    if (isDuplicate) {
+      results.push(`⏭ <b>${eventData.title}</b> — already in this itinerary`);
+      continue;
+    }
+
     // Find the matching day
     const dayIndex = itData.days.findIndex((d) => d.date === eventDateStr);
     if (dayIndex === -1) {
