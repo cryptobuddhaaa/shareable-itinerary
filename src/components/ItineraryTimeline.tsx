@@ -28,6 +28,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [contactsExpanded, setContactsExpanded] = useState(true);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [eventSearch, setEventSearch] = useState('');
   const { confirm, dialogProps } = useConfirmDialog();
 
   const itinerary = sharedItinerary || currentItinerary();
@@ -240,8 +241,53 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
         </div>
       </div>
 
+      {/* Event search */}
+      {itinerary.days.some((d) => d.events.length > 0) && (
+        <div className="mb-4">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              className="block w-full pl-9 pr-8 py-2 text-sm border border-slate-600 rounded-md bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            {eventSearch && (
+              <button
+                onClick={() => setEventSearch('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                aria-label="Clear search"
+              >
+                <svg className="h-4 w-4 text-slate-400 hover:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {itinerary.days.map((day) => {
-        const isExpanded = expandedDays.has(day.date);
+        const searchLower = eventSearch.toLowerCase().trim();
+        const filteredEvents = searchLower
+          ? day.events.filter((ev) =>
+              ev.title.toLowerCase().includes(searchLower) ||
+              ev.location.name.toLowerCase().includes(searchLower) ||
+              ev.location.address?.toLowerCase().includes(searchLower) ||
+              ev.eventType.toLowerCase().includes(searchLower) ||
+              ev.goals?.some((g) => g.toLowerCase().includes(searchLower))
+            )
+          : day.events;
+
+        // Hide days with no matching events when searching
+        if (searchLower && filteredEvents.length === 0) return null;
+
+        const isExpanded = searchLower ? true : expandedDays.has(day.date);
         return (
           <div key={day.date} className="bg-slate-800 shadow rounded-lg p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
@@ -267,7 +313,10 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                     <p className="text-sm text-slate-300 mt-1">Goals: {day.goals.join(', ')}</p>
                   )}
                   <p className="text-xs text-slate-400 mt-1">
-                    {day.events.length} event{day.events.length !== 1 ? 's' : ''}
+                    {searchLower
+                      ? `${filteredEvents.length} of ${day.events.length} event${day.events.length !== 1 ? 's' : ''}`
+                      : `${day.events.length} event${day.events.length !== 1 ? 's' : ''}`
+                    }
                   </p>
                 </div>
               </button>
@@ -289,11 +338,11 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
 
           {isExpanded && (
             <>
-              {day.events.length === 0 ? (
+              {filteredEvents.length === 0 ? (
                 <p className="text-slate-400 text-center py-8">No events scheduled for this day</p>
               ) : (
                 <div className="space-y-4">
-              {[...day.events]
+              {[...filteredEvents]
                 .sort((a, b) => {
                   // Sort events by start time
                   return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();

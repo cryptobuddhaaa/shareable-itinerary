@@ -14,6 +14,14 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     const generateUrl = async () => {
       try {
         setLoading(true);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
 import { CreateItinerarySchema } from '../lib/validation';
 import { z } from 'zod';
@@ -17,6 +17,14 @@ export default function EditItineraryDialog({ itinerary, onClose }: EditItinerar
   const [location, setLocation] = useState(itinerary.location);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

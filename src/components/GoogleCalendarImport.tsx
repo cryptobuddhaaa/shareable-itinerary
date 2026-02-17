@@ -22,6 +22,18 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!showPreview) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowPreview(false);
+        setSelectedEvents(new Set());
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showPreview]);
+
+  useEffect(() => {
     // Check if just connected from OAuth callback
     const justConnected = sessionStorage.getItem('google_calendar_connected') === 'true';
     const hasToken = googleCalendarService.isConnected();

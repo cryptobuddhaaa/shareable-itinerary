@@ -29,6 +29,19 @@ export default function ContactsPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'n' && !showAddContact && !showInvite) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        e.preventDefault();
+        setShowAddContact(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showAddContact, showInvite]);
+
   const handleLinkTelegram = async () => {
     setLinkLoading(true);
     try {
@@ -279,17 +292,41 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {filteredAndSortedContacts.length === 0 && searchQuery && (
-        <div className="text-center py-12 bg-slate-800 rounded-lg shadow">
-          <svg className="mx-auto h-12 w-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      {contacts.length === 0 ? (
+        <div className="text-center py-16 bg-slate-800 rounded-lg shadow">
+          <svg className="mx-auto h-16 w-16 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-white">No contacts found</h3>
-          <p className="mt-1 text-sm text-slate-400">Try adjusting your search query</p>
+          <h3 className="mt-4 text-lg font-semibold text-white">No contacts yet</h3>
+          <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
+            Start building your network by adding contacts from events,
+            or forward messages in the Telegram bot to quickly save people you meet.
+          </p>
+          <button
+            onClick={() => setShowAddContact(true)}
+            className="mt-6 inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Your First Contact
+          </button>
         </div>
-      )}
+      ) : (
+        <>
+          {filteredAndSortedContacts.length === 0 && searchQuery && (
+            <div className="text-center py-12 bg-slate-800 rounded-lg shadow">
+              <svg className="mx-auto h-12 w-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-white">No contacts found</h3>
+              <p className="mt-1 text-sm text-slate-400">Try adjusting your search query</p>
+            </div>
+          )}
 
-      <ContactsList contacts={filteredAndSortedContacts} />
+          <ContactsList contacts={filteredAndSortedContacts} />
+        </>
+      )}
 
       {showAddContact && (
         <ContactForm onClose={() => setShowAddContact(false)} />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useContacts } from '../hooks/useContacts';
 import { useItinerary } from '../hooks/useItinerary';
@@ -26,6 +26,14 @@ export default function EditContactDialog({ contact, onClose }: EditContactDialo
   const [showLinkEvent, setShowLinkEvent] = useState(false);
   const [selectedItineraryId, setSelectedItineraryId] = useState(contact.itineraryId || '');
   const [selectedEventId, setSelectedEventId] = useState(contact.eventId || '');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   // Get events for the selected itinerary
   const selectedItinerary = itineraries.find((it) => it.id === selectedItineraryId);

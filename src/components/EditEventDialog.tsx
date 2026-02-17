@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useItinerary } from '../hooks/useItinerary';
 import { CreateEventSchema } from '../lib/validation';
 import { z } from 'zod';
@@ -31,6 +31,14 @@ export default function EditEventDialog({ event, dayDate, onClose }: EditEventDi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLuma, setIsLoadingLuma] = useState(false);
   const [lumaError, setLumaError] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleFetchFromLuma = async () => {
     if (!lumaUrl || !lumaService.isLumaUrl(lumaUrl)) {

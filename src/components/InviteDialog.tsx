@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import { useItinerary } from '../hooks/useItinerary';
 import { toast } from './Toast';
@@ -32,6 +32,14 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [sendIndex, setSendIndex] = useState(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   // Only contacts with telegram handles
   const eligibleContacts = useMemo(() => {

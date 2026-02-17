@@ -102,6 +102,20 @@ function App() {
     setPrevItineraryCount(itineraries.length);
   }, [itineraries.length, prevItineraryCount, showCreateForm]);
 
+  // Keyboard shortcut: 'n' to create new itinerary (when on itinerary tab)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'n' && activeTab === 'itinerary' && !showCreateForm) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        e.preventDefault();
+        setShowCreateForm(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, showCreateForm]);
+
   // Show loading state
   if (authLoading) {
     return (
