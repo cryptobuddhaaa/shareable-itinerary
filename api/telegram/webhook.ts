@@ -4,7 +4,7 @@
  *
  * Handles all incoming Telegram updates for the bot.
  * Flows:
- *   /add           → select itinerary → select event → input fields → confirm → save contact
+ *   /newcontact           → select itinerary → select event → input fields → confirm → save contact
  *   /newitinerary  → title → location → start date → end date → confirm → save itinerary
  *   /newevent      → select itinerary → select day → title → type → start time → end time → location → confirm → save event
  */
@@ -166,7 +166,7 @@ async function getLinkedUserId(telegramUserId: number): Promise<string | null> {
 }
 
 // ============================================================
-// CONTACT CREATION FLOW (/add)
+// CONTACT CREATION FLOW (/newcontact)
 // ============================================================
 
 async function handleStart(
@@ -181,7 +181,7 @@ async function handleStart(
       await sendMessage(
         chatId,
         '👋 Welcome back! Your account is linked.\n\n' +
-          'Use /add to add a new contact.\n' +
+          'Use /newcontact to add a new contact.\n' +
           'Use /newitinerary to create a trip.\n' +
           'Use /newevent to add an event.\n' +
           'Use /help for all commands.',
@@ -243,11 +243,11 @@ async function handleStart(
 
   await sendMessage(
     chatId,
-    '✅ Account linked successfully!\n\nUse /add to add a new contact, /newitinerary to create a trip, or /newevent to add an event.'
+    '✅ Account linked successfully!\n\nUse /newcontact to add a new contact, /newitinerary to create a trip, or /newevent to add an event.'
   );
 }
 
-async function handleAdd(chatId: number, telegramUserId: number) {
+async function handleNewContact(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);
   if (!userId) {
     await sendMessage(
@@ -713,7 +713,7 @@ async function handleContactConfirmation(
     `✅ Contact saved!\n\n` +
       `<b>${displayName}</b>${company}\n` +
       (eventTitle ? `→ ${eventTitle}\n\n` : '\n') +
-      'Use /add to add another contact.',
+      'Use /newcontact to add another contact.',
     {
       reply_markup: {
         inline_keyboard: [
@@ -962,7 +962,7 @@ async function handleItineraryConfirmation(
       `<b>${it.title}</b>\n` +
       `📍 ${it.location}\n` +
       `📅 ${diffDays} day${diffDays !== 1 ? 's' : ''}\n\n` +
-      'Use /newevent to add events, or /add to add contacts.',
+      'Use /newevent to add events, or /newcontact to add contacts.',
     {
       reply_markup: {
         inline_keyboard: [
@@ -1417,7 +1417,7 @@ async function handleEventConfirmation(
       `${getEventTypeLabel(ev.eventType)} · ${ev.startTime} — ${ev.endTime}\n` +
       `📅 ${fmtDate}\n` +
       (ev.locationName ? `📍 ${ev.locationName}\n` : '') +
-      '\nUse /newevent to add another event, or /add to add a contact.',
+      '\nUse /newevent to add another event, or /newcontact to add a contact.',
     {
       reply_markup: {
         inline_keyboard: [
@@ -1499,7 +1499,7 @@ async function handleTextInput(
   // No matching state
   await sendMessage(
     chatId,
-    'Use /add to add a contact, /newitinerary to create a trip, /newevent to add an event, or /help for commands.'
+    'Use /newcontact to add a contact, /newitinerary to create a trip, /newevent to add an event, or /help for commands.'
   );
 }
 
@@ -1531,8 +1531,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (text.startsWith('/start')) {
         const args = text.substring('/start'.length).trim();
         await handleStart(chatId, telegramUserId, telegramUsername, args);
-      } else if (text === '/add') {
-        await handleAdd(chatId, telegramUserId);
+      } else if (text === '/newcontact') {
+        await handleNewContact(chatId, telegramUserId);
       } else if (text === '/newitinerary') {
         await handleNewItinerary(chatId, telegramUserId);
       } else if (text === '/newevent') {
@@ -1546,7 +1546,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           '<b>Available commands:</b>\n\n' +
             '/newitinerary — Create a new trip\n' +
             '/newevent — Add an event to a trip\n' +
-            '/add — Add a new contact\n' +
+            '/newcontact — Add a new contact\n' +
             '/cancel — Cancel current operation\n' +
             '/help — Show this help message',
           {
