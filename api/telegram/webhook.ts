@@ -2089,17 +2089,102 @@ async function handleContactsListSelection(
   if (!userId) return;
 
   if (selection === 'all') {
-    await showContactsList(chatId, userId, undefined, 'All Contacts');
+    await showContactsList(chatId, userId, undefined, undefined, 'All Contacts');
+    return;
+  }
+
+  // Fetch itinerary with events
+  const { data: it } = await supabase
+    .from('itineraries')
+    .select('id, title, data')
+    .eq('id', selection)
+    .eq('user_id', userId)
+    .single();
+
+  if (!it) {
+    await sendMessage(chatId, '❌ Itinerary not found.');
+    return;
+  }
+
+  // Extract events from itinerary data
+  const itData = it.data as { days?: Array<{ date: string; events?: Array<{ id: string; title: string }> }> };
+  const events: Array<{ id: string; title: string; date: string }> = [];
+  for (const day of itData.days || []) {
+    for (const ev of day.events || []) {
+      events.push({ id: ev.id, title: ev.title, date: day.date });
+    }
+  }
+
+  if (events.length === 0) {
+    // No events — just show all contacts from this itinerary
+    await showContactsList(chatId, userId, it.id, undefined, it.title);
+    return;
+  }
+
+  // Show event selection with "All from this trip" option
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [
+    [{ text: `📋 All from ${it.title}`, callback_data: `ce:${it.id}:all` }],
+  ];
+  for (const ev of events.slice(0, 20)) {
+    const date = new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const label = `${date} — ${ev.title}`.substring(0, 60);
+    keyboard.push([{ text: label, callback_data: `ce:${it.id}:${ev.id}` }]);
+  }
+  keyboard.push([{ text: '« Back', callback_data: 'ce:back' }]);
+
+  await sendMessage(chatId, `👥 <b>${it.title}</b>\n\nView all contacts or filter by event:`, {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+async function handleContactsEventSelection(
+  chatId: number,
+  telegramUserId: number,
+  data: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  // data is "back", "<itineraryId>:all", or "<itineraryId>:<eventId>"
+  if (data === 'back') {
+    // Re-show the itinerary list
+    await handleContacts(chatId, telegramUserId);
+    return;
+  }
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  const colonIdx = data.indexOf(':');
+  if (colonIdx === -1) return;
+
+  const itineraryId = data.substring(0, colonIdx);
+  const eventPart = data.substring(colonIdx + 1);
+
+  // Fetch itinerary title
+  const { data: it } = await supabase
+    .from('itineraries')
+    .select('title')
+    .eq('id', itineraryId)
+    .eq('user_id', userId)
+    .single();
+
+  const itTitle = it?.title || 'Trip';
+
+  if (eventPart === 'all') {
+    await showContactsList(chatId, userId, itineraryId, undefined, itTitle);
   } else {
-    // Fetch itinerary title
-    const { data: it } = await supabase
-      .from('itineraries')
-      .select('title')
-      .eq('id', selection)
+    // Find event title from contacts that have this event_id
+    const { data: sample } = await supabase
+      .from('contacts')
+      .select('event_title')
+      .eq('event_id', eventPart)
       .eq('user_id', userId)
+      .limit(1)
       .single();
 
-    await showContactsList(chatId, userId, selection, it?.title || 'Trip');
+    const label = sample?.event_title || 'Event';
+    await showContactsList(chatId, userId, itineraryId, eventPart, `${itTitle} → ${label}`);
   }
 }
 
@@ -2107,6 +2192,7 @@ async function showContactsList(
   chatId: number,
   userId: string,
   itineraryId: string | undefined,
+  eventId: string | undefined,
   label: string
 ) {
   let query = supabase
@@ -2117,6 +2203,9 @@ async function showContactsList(
 
   if (itineraryId) {
     query = query.eq('itinerary_id', itineraryId);
+  }
+  if (eventId) {
+    query = query.eq('event_id', eventId);
   }
 
   const { data: contacts } = await query.limit(50);
@@ -2400,6 +2489,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // --- Contacts list callbacks ---
       else if (data.startsWith('cl:')) {
         await handleContactsListSelection(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      else if (data.startsWith('ce:')) {
+        await handleContactsEventSelection(chatId, telegramUserId, data.substring(3), cq.id);
       }
     }
 
