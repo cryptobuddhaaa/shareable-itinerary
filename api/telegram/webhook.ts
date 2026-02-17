@@ -356,17 +356,30 @@ async function handleItinerarySelection(
   const userId = await getLinkedUserId(telegramUserId);
   if (!userId) return;
 
-  // Skip itinerary/event — go straight to contact fields
+  // Check if we're in forward mode (contact info already populated)
+  const currentState = await getState(telegramUserId);
+  const isForwardMode = !!currentState.data?._forwardMode;
+
+  // Skip itinerary/event — go straight to contact fields (or confirmation in forward mode)
   if (itineraryId === 'skip') {
-    await setState(telegramUserId, 'input_telegram_handle', {
-      contact: {},
-    });
-    await sendMessage(
-      chatId,
-      '📝 Adding standalone contact\n\n' +
-        'Enter their <b>Telegram handle</b> (required):\n' +
-        '<i>e.g. @johndoe</i>'
-    );
+    if (isForwardMode) {
+      const data = { ...currentState.data };
+      delete data.itineraryId;
+      delete data.eventId;
+      delete data.eventTitle;
+      delete data.eventDate;
+      await showContactConfirmation(chatId, telegramUserId, data);
+    } else {
+      await setState(telegramUserId, 'input_telegram_handle', {
+        contact: {},
+      });
+      await sendMessage(
+        chatId,
+        '📝 Adding standalone contact\n\n' +
+          'Enter their <b>Telegram handle</b> (required):\n' +
+          '<i>e.g. @johndoe</i>'
+      );
+    }
     return;
   }
 
@@ -421,11 +434,17 @@ async function handleItinerarySelection(
   // Option to skip event linking
   keyboard.push([{ text: '⏭ Skip — add without event', callback_data: 'ev:skip' }]);
 
-  await setState(telegramUserId, 'select_event', {
+  const eventStateData: Record<string, unknown> = {
     itineraryId: itinerary.id,
     itineraryTitle: itinerary.title,
     events: events.map((e) => ({ id: e.id, title: e.title, date: e.date })),
-  });
+  };
+  // Preserve forward mode data (contact info) through the selection flow
+  if (isForwardMode) {
+    eventStateData._forwardMode = true;
+    eventStateData.contact = currentState.data.contact;
+  }
+  await setState(telegramUserId, 'select_event', eventStateData);
 
   await sendMessage(
     chatId,
@@ -444,19 +463,29 @@ async function handleEventSelection(
 
   const currentState = await getState(telegramUserId);
 
+  const isForwardMode = !!currentState.data?._forwardMode;
+
   // Skip event — keep itinerary info but no event
   if (eventId === 'skip') {
-    await setState(telegramUserId, 'input_telegram_handle', {
-      itineraryId: currentState.data.itineraryId,
-      itineraryTitle: currentState.data.itineraryTitle,
-      contact: {},
-    });
-    await sendMessage(
-      chatId,
-      '📝 Adding contact (no event)\n\n' +
-        'Enter their <b>Telegram handle</b> (required):\n' +
-        '<i>e.g. @johndoe</i>'
-    );
+    if (isForwardMode) {
+      const data = { ...currentState.data };
+      delete data.eventId;
+      delete data.eventTitle;
+      delete data.eventDate;
+      await showContactConfirmation(chatId, telegramUserId, data);
+    } else {
+      await setState(telegramUserId, 'input_telegram_handle', {
+        itineraryId: currentState.data.itineraryId,
+        itineraryTitle: currentState.data.itineraryTitle,
+        contact: {},
+      });
+      await sendMessage(
+        chatId,
+        '📝 Adding contact (no event)\n\n' +
+          'Enter their <b>Telegram handle</b> (required):\n' +
+          '<i>e.g. @johndoe</i>'
+      );
+    }
     return;
   }
 
@@ -469,20 +498,31 @@ async function handleEventSelection(
     return;
   }
 
-  await setState(telegramUserId, 'input_telegram_handle', {
-    ...currentState.data,
-    eventId: selectedEvent.id,
-    eventTitle: selectedEvent.title,
-    eventDate: selectedEvent.date,
-    contact: {},
-  });
+  if (isForwardMode) {
+    // In forward mode, skip input fields and go straight to confirmation
+    const data = {
+      ...currentState.data,
+      eventId: selectedEvent.id,
+      eventTitle: selectedEvent.title,
+      eventDate: selectedEvent.date,
+    };
+    await showContactConfirmation(chatId, telegramUserId, data);
+  } else {
+    await setState(telegramUserId, 'input_telegram_handle', {
+      ...currentState.data,
+      eventId: selectedEvent.id,
+      eventTitle: selectedEvent.title,
+      eventDate: selectedEvent.date,
+      contact: {},
+    });
 
-  await sendMessage(
-    chatId,
-    `📝 Adding contact to: <b>${selectedEvent.title}</b>\n\n` +
-      'Enter their <b>Telegram handle</b> (required):\n' +
-      '<i>e.g. @johndoe</i>'
-  );
+    await sendMessage(
+      chatId,
+      `📝 Adding contact to: <b>${selectedEvent.title}</b>\n\n` +
+        'Enter their <b>Telegram handle</b> (required):\n' +
+        '<i>e.g. @johndoe</i>'
+    );
+  }
 }
 
 // --- Contact field input handlers ---
@@ -1864,55 +1904,132 @@ async function handleForwardedMessage(
     }
   }
 
-  // Pre-fill and go straight to contact confirmation flow
+  // Pre-fill contact data
   const contact: Record<string, string> = {
     telegramHandle: telegramHandle || '',
     firstName,
     lastName,
   };
 
-  const stateData: Record<string, unknown> = { contact };
+  const stateData: Record<string, unknown> = { contact, _forwardMode: true };
   if (matchedItineraryId) stateData.itineraryId = matchedItineraryId;
   if (matchedEventId) stateData.eventId = matchedEventId;
   if (matchedEventTitle) stateData.eventTitle = matchedEventTitle;
   if (matchedEventDate) stateData.eventDate = matchedEventDate;
 
-  // Show confirmation with pre-filled data
+  // Show event confirmation step before contact confirmation
   let summary = '<b>📋 Quick-add contact from forwarded message:</b>\n\n';
-  if (matchedEventTitle) {
-    summary += `📍 Matched event: <b>${matchedEventTitle}</b>\n`;
-    if (matchedEventDate) {
-      const fmtDate = new Date(matchedEventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      summary += `📅 ${fmtDate}\n`;
-    }
-    summary += '\n';
-  }
   summary += `👤 Name: ${firstName}`;
   if (lastName) summary += ` ${lastName}`;
   summary += '\n';
   if (telegramHandle) summary += `💬 Telegram: ${telegramHandle}\n`;
   if (!telegramHandle) summary += '⚠️ No username available (privacy restricted)\n';
+  summary += '\n';
 
-  await setState(telegramUserId, 'confirm', stateData);
+  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (matchedEventTitle) {
+    const fmtDate = matchedEventDate
+      ? new Date(matchedEventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : '';
+    summary += `📍 Matched event: <b>${matchedEventTitle}</b>`;
+    if (fmtDate) summary += ` (${fmtDate})`;
+    summary += '\n\nIs this the right event?';
+
+    keyboard.push([{ text: `✅ Yes — ${matchedEventTitle.substring(0, 30)}`, callback_data: 'fw:yes' }]);
+    keyboard.push([{ text: '🔄 Choose a different event', callback_data: 'fw:pick' }]);
+    keyboard.push([{ text: '➖ No event — standalone contact', callback_data: 'fw:none' }]);
+  } else {
+    summary += 'No matching event found.\nWould you like to link this contact to an event?';
+
+    keyboard.push([{ text: '📅 Choose an event', callback_data: 'fw:pick' }]);
+    keyboard.push([{ text: '➖ No event — standalone contact', callback_data: 'fw:none' }]);
+  }
+
+  keyboard.push([{ text: '❌ Cancel', callback_data: 'fw:cancel' }]);
+
+  await setState(telegramUserId, 'forward_event_choice', stateData);
 
   await sendMessage(chatId, summary, {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '✅ Save Contact', callback_data: 'cf:yes' },
-          { text: '❌ Cancel', callback_data: 'cf:no' },
-        ],
-        [
-          { text: '✏️ First Name', callback_data: 'ed:1' },
-          { text: '✏️ Last Name', callback_data: 'ed:2' },
-        ],
-        [
-          { text: '✏️ Telegram', callback_data: 'ed:0' },
-          { text: '✏️ Company', callback_data: 'ed:3' },
-        ],
-      ],
-    },
+    reply_markup: { inline_keyboard: keyboard },
   });
+}
+
+async function handleForwardEventChoice(
+  chatId: number,
+  telegramUserId: number,
+  choice: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const currentState = await getState(telegramUserId);
+  if (currentState.state !== 'forward_event_choice') {
+    await sendMessage(chatId, '❌ Session expired. Forward the message again.');
+    return;
+  }
+
+  if (choice === 'cancel') {
+    await clearState(telegramUserId);
+    await sendMessage(chatId, '❌ Cancelled. Use /help for commands.');
+    return;
+  }
+
+  if (choice === 'yes') {
+    // Use the auto-matched event — go straight to contact confirmation
+    await showContactConfirmation(chatId, telegramUserId, currentState.data);
+    return;
+  }
+
+  if (choice === 'none') {
+    // No event — remove event info and go to confirmation
+    const data = { ...currentState.data };
+    delete data.itineraryId;
+    delete data.eventId;
+    delete data.eventTitle;
+    delete data.eventDate;
+    await showContactConfirmation(chatId, telegramUserId, data);
+    return;
+  }
+
+  if (choice === 'pick') {
+    // Show itinerary selection — _forwardMode flag in state will route back to confirmation
+    const userId = await getLinkedUserId(telegramUserId);
+    if (!userId) return;
+
+    const { data: itineraries } = await supabase
+      .from('itineraries')
+      .select('id, title, start_date, end_date')
+      .eq('user_id', userId)
+      .order('start_date', { ascending: false })
+      .limit(10);
+
+    if (!itineraries || itineraries.length === 0) {
+      await sendMessage(chatId, '📅 No itineraries found. Create one in the web app first.');
+      // Fall back to no-event confirmation
+      const data = { ...currentState.data };
+      delete data.itineraryId;
+      delete data.eventId;
+      delete data.eventTitle;
+      delete data.eventDate;
+      await showContactConfirmation(chatId, telegramUserId, data);
+      return;
+    }
+
+    const keyboard = itineraries.map((it) => {
+      const start = new Date(it.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const label = `${start} — ${it.title}`.substring(0, 60);
+      return [{ text: label, callback_data: `it:${it.id}` }];
+    });
+    keyboard.push([{ text: '➖ No event — standalone contact', callback_data: 'it:skip' }]);
+
+    await setState(telegramUserId, 'select_itinerary', currentState.data);
+
+    await sendMessage(chatId, '📅 Select the trip this contact is from:', {
+      reply_markup: { inline_keyboard: keyboard },
+    });
+    return;
+  }
 }
 
 // ============================================================
@@ -2275,6 +2392,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (data.startsWith('xe:')) {
         const fieldIndex = parseInt(data.substring(3), 10);
         await handleEventEdit(chatId, telegramUserId, fieldIndex, cq.id);
+      }
+      // --- Forward event choice callbacks ---
+      else if (data.startsWith('fw:')) {
+        await handleForwardEventChoice(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Contacts list callbacks ---
       else if (data.startsWith('cl:')) {

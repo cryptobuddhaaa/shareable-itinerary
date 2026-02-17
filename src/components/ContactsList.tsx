@@ -32,10 +32,15 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
 
-  const handleMarkContacted = async (contact: Contact) => {
+  const handleToggleContacted = async (contact: Contact) => {
     try {
-      await updateContact(contact.id, { lastContactedAt: new Date().toISOString() });
-      toast.info(`Marked ${contact.firstName} as contacted`);
+      if (contact.lastContactedAt) {
+        await updateContact(contact.id, { lastContactedAt: null });
+        toast.info(`Cleared contacted status for ${contact.firstName}`);
+      } else {
+        await updateContact(contact.id, { lastContactedAt: new Date().toISOString() });
+        toast.info(`Marked ${contact.firstName} as contacted`);
+      }
     } catch {
       toast.error('Failed to update contact.');
     }
@@ -119,10 +124,10 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
               </div>
               <div className="flex gap-1">
                 <button
-                  onClick={() => handleMarkContacted(contact)}
-                  className="text-green-400 hover:text-green-300 p-1.5"
-                  title="Mark as contacted"
-                  aria-label="Mark as contacted"
+                  onClick={() => handleToggleContacted(contact)}
+                  className={`${contact.lastContactedAt ? 'text-green-400 hover:text-red-400' : 'text-slate-400 hover:text-green-400'} p-1.5`}
+                  title={contact.lastContactedAt ? 'Clear contacted status' : 'Mark as contacted'}
+                  aria-label={contact.lastContactedAt ? 'Clear contacted status' : 'Mark as contacted'}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
