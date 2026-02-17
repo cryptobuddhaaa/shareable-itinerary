@@ -4,11 +4,11 @@ import { useContacts } from '../hooks/useContacts';
 import { CreateContactSchema } from '../lib/validation';
 
 interface ContactFormProps {
-  itineraryId: string;
-  eventId: string;
-  eventTitle: string;
+  itineraryId?: string;
+  eventId?: string;
+  eventTitle?: string;
   lumaEventUrl?: string;
-  dateMet: string;
+  dateMet?: string;
   onClose: () => void;
 }
 
@@ -98,19 +98,23 @@ export default function ContactForm({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Add Contact</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                From: <span className="font-medium">{eventTitle}</span>
-              </p>
-              <p className="text-sm text-gray-500">{formatDate(dateMet)}</p>
+              <h2 className="text-2xl font-bold text-white">Add Contact</h2>
+              {eventTitle ? (
+                <p className="text-sm text-slate-300 mt-1">
+                  From: <span className="font-medium">{eventTitle}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-slate-400 mt-1">Standalone contact</p>
+              )}
+              {dateMet && <p className="text-sm text-slate-400">{formatDate(dateMet)}</p>}
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-slate-400 hover:text-slate-200"
               aria-label="Close"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,14 +125,14 @@ export default function ContactForm({
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {errors.form && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded">
                 {errors.form}
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="firstName" className="block text-sm font-medium text-slate-300 mb-1">
                   First Name *
                 </label>
                 <input
@@ -136,16 +140,16 @@ export default function ContactForm({
                   id="firstName"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.firstName ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.firstName ? 'border-red-500' : 'border-slate-600'
                   }`}
                   disabled={isSubmitting}
                 />
-                {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
+                {errors.firstName && <p className="mt-1 text-sm text-red-400">{errors.firstName}</p>}
               </div>
 
               <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="lastName" className="block text-sm font-medium text-slate-300 mb-1">
                   Last Name *
                 </label>
                 <input
@@ -153,18 +157,18 @@ export default function ContactForm({
                   id="lastName"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.lastName ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.lastName ? 'border-red-500' : 'border-slate-600'
                   }`}
                   disabled={isSubmitting}
                 />
-                {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>}
+                {errors.lastName && <p className="mt-1 text-sm text-red-400">{errors.lastName}</p>}
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="projectCompany" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="projectCompany" className="block text-sm font-medium text-slate-300 mb-1">
                   Project/Company
                 </label>
                 <input
@@ -172,16 +176,16 @@ export default function ContactForm({
                   id="projectCompany"
                   value={projectCompany}
                   onChange={(e) => setProjectCompany(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.projectCompany ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.projectCompany ? 'border-red-500' : 'border-slate-600'
                   }`}
                   disabled={isSubmitting}
                 />
-                {errors.projectCompany && <p className="mt-1 text-sm text-red-600">{errors.projectCompany}</p>}
+                {errors.projectCompany && <p className="mt-1 text-sm text-red-400">{errors.projectCompany}</p>}
               </div>
 
               <div>
-                <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="position" className="block text-sm font-medium text-slate-300 mb-1">
                   Position
                 </label>
                 <input
@@ -189,38 +193,38 @@ export default function ContactForm({
                   id="position"
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.position ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.position ? 'border-red-500' : 'border-slate-600'
                   }`}
                   disabled={isSubmitting}
                 />
-                {errors.position && <p className="mt-1 text-sm text-red-600">{errors.position}</p>}
+                {errors.position && <p className="mt-1 text-sm text-red-400">{errors.position}</p>}
               </div>
             </div>
 
             <div>
-              <label htmlFor="telegramHandle" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="telegramHandle" className="block text-sm font-medium text-slate-300 mb-1">
                 Telegram Handle
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-gray-500">@</span>
+                <span className="absolute left-3 top-2 text-slate-400">@</span>
                 <input
                   type="text"
                   id="telegramHandle"
                   value={telegramHandle}
                   onChange={(e) => setTelegramHandle(e.target.value)}
-                  className={`w-full pl-7 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.telegramHandle ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full pl-7 pr-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.telegramHandle ? 'border-red-500' : 'border-slate-600'
                   }`}
                   placeholder="username"
                   disabled={isSubmitting}
                 />
               </div>
-              {errors.telegramHandle && <p className="mt-1 text-sm text-red-600">{errors.telegramHandle}</p>}
+              {errors.telegramHandle && <p className="mt-1 text-sm text-red-400">{errors.telegramHandle}</p>}
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">
                 Email
               </label>
               <input
@@ -228,16 +232,16 @@ export default function ContactForm({
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.email ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.email ? 'border-red-500' : 'border-slate-600'
                 }`}
                 disabled={isSubmitting}
               />
-              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+              {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email}</p>}
             </div>
 
             <div>
-              <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="linkedin" className="block text-sm font-medium text-slate-300 mb-1">
                 LinkedIn
               </label>
               <input
@@ -245,19 +249,19 @@ export default function ContactForm({
                 id="linkedin"
                 value={linkedin}
                 onChange={(e) => setLinkedin(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.linkedin ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.linkedin ? 'border-red-500' : 'border-slate-600'
                 }`}
                 placeholder="hsuchuanli or https://linkedin.com/in/hsuchuanli/"
                 disabled={isSubmitting}
               />
-              {errors.linkedin && <p className="mt-1 text-sm text-red-600">{errors.linkedin}</p>}
+              {errors.linkedin && <p className="mt-1 text-sm text-red-400">{errors.linkedin}</p>}
             </div>
 
             <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
                 Notes
-                <span className="text-gray-500 text-xs ml-1">({notes.length}/100)</span>
+                <span className="text-slate-500 text-xs ml-1">({notes.length}/100)</span>
               </label>
               <textarea
                 id="notes"
@@ -265,27 +269,27 @@ export default function ContactForm({
                 onChange={(e) => setNotes(e.target.value)}
                 maxLength={100}
                 rows={2}
-                className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.notes ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-3 py-2 border rounded-md bg-slate-700 text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.notes ? 'border-red-500' : 'border-slate-600'
                 }`}
                 disabled={isSubmitting}
                 placeholder="Any additional notes about this contact..."
               />
-              {errors.notes && <p className="mt-1 text-sm text-red-600">{errors.notes}</p>}
+              {errors.notes && <p className="mt-1 text-sm text-red-400">{errors.notes}</p>}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-slate-600 rounded-md text-slate-300 hover:bg-slate-700"
                 disabled={isSubmitting}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Adding...' : 'Add Contact'}

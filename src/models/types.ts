@@ -75,8 +75,8 @@ export interface Itinerary {
 
 export interface Contact {
   id: string;
-  itineraryId: string;
-  eventId: string;
+  itineraryId?: string;
+  eventId?: string;
   userId: string;
   firstName: string;
   lastName: string;
@@ -86,9 +86,9 @@ export interface Contact {
   email?: string;
   linkedin?: string;
   notes?: string;
-  eventTitle: string; // Denormalized from event for easier display
+  eventTitle?: string; // Denormalized from event for easier display
   lumaEventUrl?: string; // Luma URL from the event (denormalized)
-  dateMet: string; // ISO8601 date
+  dateMet?: string; // ISO8601 date
   createdAt: string; // ISO8601 datetime
   updatedAt: string; // ISO8601 datetime
 }

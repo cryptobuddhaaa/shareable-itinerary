@@ -14,11 +14,11 @@ interface ContactsState {
   // Actions
   initialize: (userId: string) => Promise<void>;
   addContact: (contactData: {
-    itineraryId: string;
-    eventId: string;
-    eventTitle: string;
+    itineraryId?: string;
+    eventId?: string;
+    eventTitle?: string;
     lumaEventUrl?: string;
-    dateMet: string;
+    dateMet?: string;
     firstName: string;
     lastName: string;
     projectCompany?: string;
@@ -32,6 +32,29 @@ interface ContactsState {
   deleteContact: (contactId: string) => Promise<void>;
   deleteContactsByEvent: (eventId: string) => Promise<void>;
   reset: () => void;
+}
+
+/** Maps a Supabase row (snake_case) to the Contact interface (camelCase) */
+function mapRowToContact(row: Record<string, unknown>): Contact {
+  return {
+    id: row.id as string,
+    itineraryId: (row.itinerary_id as string) || undefined,
+    eventId: (row.event_id as string) || undefined,
+    userId: row.user_id as string,
+    firstName: row.first_name as string,
+    lastName: row.last_name as string,
+    projectCompany: row.project_company as string | undefined,
+    position: row.position as string | undefined,
+    telegramHandle: row.telegram_handle as string | undefined,
+    email: row.email as string | undefined,
+    linkedin: row.linkedin as string | undefined,
+    notes: row.notes as string | undefined,
+    eventTitle: (row.event_title as string) || undefined,
+    lumaEventUrl: row.luma_event_url as string | undefined,
+    dateMet: (row.date_met as string) || undefined,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
 }
 
 export const useContacts = create<ContactsState>()((set, get) => ({
@@ -60,25 +83,7 @@ export const useContacts = create<ContactsState>()((set, get) => ({
 
       if (error) throw error;
 
-      const contacts: Contact[] = (data || []).map((row) => ({
-        id: row.id,
-        itineraryId: row.itinerary_id,
-        eventId: row.event_id,
-        userId: row.user_id,
-        firstName: row.first_name,
-        lastName: row.last_name,
-        projectCompany: row.project_company,
-        position: row.position,
-        telegramHandle: row.telegram_handle,
-        email: row.email,
-        linkedin: row.linkedin,
-        notes: row.notes,
-        eventTitle: row.event_title,
-        lumaEventUrl: row.luma_event_url,
-        dateMet: row.date_met,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
+      const contacts: Contact[] = (data || []).map(mapRowToContact);
 
       set({
         contacts,
@@ -106,8 +111,8 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       const { data, error } = await supabase
         .from('contacts')
         .insert({
-          itinerary_id: contactData.itineraryId,
-          event_id: contactData.eventId,
+          itinerary_id: contactData.itineraryId || null,
+          event_id: contactData.eventId || null,
           user_id: user.id,
           first_name: contactData.firstName,
           last_name: contactData.lastName,
@@ -117,34 +122,16 @@ export const useContacts = create<ContactsState>()((set, get) => ({
           email: contactData.email,
           linkedin: contactData.linkedin,
           notes: contactData.notes,
-          event_title: contactData.eventTitle,
+          event_title: contactData.eventTitle || null,
           luma_event_url: contactData.lumaEventUrl,
-          date_met: contactData.dateMet,
+          date_met: contactData.dateMet || null,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      const newContact: Contact = {
-        id: data.id,
-        itineraryId: data.itinerary_id,
-        eventId: data.event_id,
-        userId: data.user_id,
-        firstName: data.first_name,
-        lastName: data.last_name,
-        projectCompany: data.project_company,
-        position: data.position,
-        telegramHandle: data.telegram_handle,
-        email: data.email,
-        linkedin: data.linkedin,
-        notes: data.notes,
-        eventTitle: data.event_title,
-        lumaEventUrl: data.luma_event_url,
-        dateMet: data.date_met,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      };
+      const newContact = mapRowToContact(data);
 
       set((state) => ({
         contacts: [newContact, ...state.contacts],
@@ -169,6 +156,11 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       if (updates.email !== undefined) updateData.email = updates.email;
       if (updates.linkedin !== undefined) updateData.linkedin = updates.linkedin;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
+      if (updates.itineraryId !== undefined) updateData.itinerary_id = updates.itineraryId || null;
+      if (updates.eventId !== undefined) updateData.event_id = updates.eventId || null;
+      if (updates.eventTitle !== undefined) updateData.event_title = updates.eventTitle || null;
+      if (updates.dateMet !== undefined) updateData.date_met = updates.dateMet || null;
+      if (updates.lumaEventUrl !== undefined) updateData.luma_event_url = updates.lumaEventUrl || null;
 
       const { data, error } = await supabase
         .from('contacts')
@@ -179,25 +171,7 @@ export const useContacts = create<ContactsState>()((set, get) => ({
 
       if (error) throw error;
 
-      const updatedContact: Contact = {
-        id: data.id,
-        itineraryId: data.itinerary_id,
-        eventId: data.event_id,
-        userId: data.user_id,
-        firstName: data.first_name,
-        lastName: data.last_name,
-        projectCompany: data.project_company,
-        position: data.position,
-        telegramHandle: data.telegram_handle,
-        email: data.email,
-        linkedin: data.linkedin,
-        notes: data.notes,
-        eventTitle: data.event_title,
-        lumaEventUrl: data.luma_event_url,
-        dateMet: data.date_met,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      };
+      const updatedContact = mapRowToContact(data);
 
       set((state) => ({
         contacts: state.contacts.map((c) =>

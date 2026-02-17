@@ -5,6 +5,7 @@
 
 import { X, Check, Sparkles, Zap } from 'lucide-react';
 import { subscriptionService, type SubscriptionTier } from '../../services/subscriptionService';
+import { toast } from '../Toast';
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -23,9 +24,7 @@ export function PaywallModal({ isOpen, onClose, currentTier, usageInfo }: Paywal
   const proPricing = subscriptionService.getTierPricing('pro');
 
   const handleUpgrade = (tier: SubscriptionTier) => {
-    // TODO: Implement Stripe checkout
-    console.log('Upgrade to:', tier);
-    alert(`Stripe integration coming soon! You selected ${tier} tier.`);
+    toast.info(`Stripe integration coming soon! You selected ${tier} tier.`);
   };
 
   return (
@@ -36,6 +35,7 @@ export function PaywallModal({ isOpen, onClose, currentTier, usageInfo }: Paywal
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>

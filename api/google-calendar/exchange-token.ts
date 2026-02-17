@@ -22,9 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI;
 
-    if (!clientId || !clientSecret) {
+    if (!clientId || !clientSecret || !redirectUri) {
       return res.status(500).json({
-        error: 'Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
+        error: 'Google OAuth not configured. Please set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.',
       });
     }
 
@@ -38,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         code,
         client_id: clientId,
         client_secret: clientSecret,
-        redirect_uri: redirectUri || `${req.headers.origin}/auth/google/callback.html`,
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
     });

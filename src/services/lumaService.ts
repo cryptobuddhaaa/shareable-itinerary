@@ -85,7 +85,7 @@ export const lumaService = {
 
       // Try to find location and time in meta tags or JSON-LD
       const jsonLd = doc.querySelector('script[type="application/ld+json"]');
-      let eventData: any = {};
+      let eventData: Record<string, unknown> = {};
 
       if (jsonLd) {
         try {
@@ -96,10 +96,12 @@ export const lumaService = {
       }
 
       // Extract event details
-      const startTime = eventData.startDate || '';
-      const endTime = eventData.endDate || '';
-      const locationName = eventData.location?.name || '';
-      const locationAddress = eventData.location?.address?.streetAddress || '';
+      const startTime = (eventData.startDate as string) || '';
+      const endTime = (eventData.endDate as string) || '';
+      const loc = eventData.location as Record<string, unknown> | undefined;
+      const locationName = (loc?.name as string) || '';
+      const addr = loc?.address as Record<string, unknown> | string | undefined;
+      const locationAddress = typeof addr === 'string' ? addr : (addr?.streetAddress as string) || '';
 
       if (!title) {
         return null;

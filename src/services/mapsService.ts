@@ -41,35 +41,6 @@ export const mapsService = {
   },
 
   /**
-   * Geocode address to coordinates using browser Geolocation API
-   * Note: This is a fallback - for production, use Google Geocoding API
-   */
-  async geocodeAddress(_address: string): Promise<{ lat: number; lng: number } | null> {
-    // This would require Google Geocoding API in production
-    // For MVP, we'll store the address and generate maps URLs without coordinates
-    console.log('Geocoding not implemented yet - would require Google Geocoding API');
-    return null;
-  },
-
-  /**
-   * Estimate transit time between two locations
-   * This is a simple estimation based on distance
-   * For production, use Google Directions API
-   */
-  estimateTransitTime(origin: Location, destination: Location): number {
-    // Simple estimation: if both locations have addresses, assume they're close
-    // Return time in minutes
-
-    // This is a placeholder - real implementation would use Google Directions API
-    if (origin.name === destination.name) {
-      return 0; // Same location
-    }
-
-    // Default estimate: 20 minutes for different locations
-    return 20;
-  },
-
-  /**
    * Check if location is likely in the same city/area
    */
   isSameArea(location1: Location, location2: Location): boolean {

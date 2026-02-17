@@ -41,15 +41,16 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+      <div className="bg-slate-800 rounded-lg max-w-2xl w-full p-6">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Share Itinerary</h3>
-            <p className="text-sm text-gray-600 mt-1">{itinerary.title}</p>
+            <h3 className="text-lg font-semibold text-white">Share Itinerary</h3>
+            <p className="text-sm text-slate-300 mt-1">{itinerary.title}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-slate-400 hover:text-slate-200"
+            aria-label="Close"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -61,7 +62,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="ml-3 text-gray-600">Generating share link...</p>
+              <p className="ml-3 text-slate-300">Generating share link...</p>
             </div>
           )}
 
@@ -74,7 +75,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
           {!error && !loading && (
           <>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 Shareable URL
               </label>
               <div className="flex gap-2">
@@ -82,11 +83,11 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
                   type="text"
                   value={shareUrl}
                   readOnly
-                  className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border bg-gray-50"
+                  className="flex-1 rounded-md border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border bg-slate-700 text-white"
                 />
                 <button
                   onClick={handleCopy}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-slate-800 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   {copied ? (
                     <>
@@ -105,7 +106,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
                   )}
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-sm text-slate-400 mt-2">
                 Share this short URL with anyone to let them view your itinerary. No account required to view!
               </p>
             </div>
@@ -122,7 +123,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
           <div className="flex justify-end pt-4">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-slate-800 focus:ring-offset-2 focus:ring-blue-500"
             >
               Close
             </button>

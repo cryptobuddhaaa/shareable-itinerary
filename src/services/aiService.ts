@@ -3,7 +3,8 @@
  * Handles event creation, analysis, and contact intelligence
  */
 
-import { getEventCreationPrompt, getAnalysisPrompt, getContactBriefingPrompt } from '../utils/promptTemplates';
+import { getEventCreationPrompt, getAnalysisPrompt, getContactBriefingPrompt, type ItineraryContext } from '../utils/promptTemplates';
+import type { Itinerary, ItineraryEvent, Contact } from '../models/types';
 
 interface AIResponse {
   action: 'create_event' | 'delete_event' | 'clarify' | 'error';
@@ -76,7 +77,7 @@ class AIService {
    */
   async parseEventInput(
     userMessage: string,
-    itineraryContext: any,
+    itineraryContext: ItineraryContext,
     conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   ): Promise<AIResponse> {
     try {
@@ -111,8 +112,8 @@ class AIService {
    * Analyze itinerary for conflicts and optimizations
    */
   async analyzeItinerary(
-    itinerary: any,
-    events: any[]
+    itinerary: Itinerary,
+    events: ItineraryEvent[]
   ): Promise<AnalysisResponse> {
     try {
       const prompt = getAnalysisPrompt(itinerary, events);
@@ -138,8 +139,8 @@ class AIService {
    * Generate meeting briefing
    */
   async generateBriefing(
-    event: any,
-    contacts: any[]
+    event: ItineraryEvent,
+    contacts: Contact[]
   ): Promise<BriefingResponse> {
     try {
       const prompt = getContactBriefingPrompt(event, contacts);
@@ -229,7 +230,11 @@ class AIService {
     }
 
     const data = await response.json();
-    return data.content[0].text;
+    const text = data?.content?.[0]?.text;
+    if (typeof text !== 'string') {
+      throw new Error('Unexpected API response format');
+    }
+    return text;
   }
 
   /**

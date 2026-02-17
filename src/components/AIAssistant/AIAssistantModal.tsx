@@ -5,29 +5,48 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import aiService from '../../services/aiService';
 import { PaywallModal } from '../Premium/PaywallModal';
 import { sanitizeText } from '../../lib/validation';
-import { normalizeEvents } from '../../utils/eventNormalizer';
+import type { Itinerary, ItineraryEvent, Contact } from '../../models/types';
+import { ConfirmDialog, useConfirmDialog } from '../ConfirmDialog';
+
+type SuggestedEvent = {
+  _deleteAction?: false;
+  title: string;
+  startTime: string;
+  endTime: string;
+  eventType: string;
+  location?: { name: string; address?: string };
+  description?: string;
+} | {
+  _deleteAction: true;
+  eventTitle: string;
+  eventDate?: string;
+  eventTime?: string;
+  hasContacts?: boolean;
+  contactCount?: number;
+};
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  suggestedEvent?: any;
+  suggestedEvent?: SuggestedEvent;
 }
 
 interface AIAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
-  itinerary: any;
+  itinerary: Itinerary;
   currentDate?: string;
-  existingEvents?: any[];
-  contacts?: any[];
-  onEventCreate: (event: any) => void;
+  existingEvents?: ItineraryEvent[];
+  contacts?: Contact[];
+  onEventCreate: (event: Partial<ItineraryEvent>) => void;
   onEventDelete: (eventId: string) => Promise<void>;
-  user: any;
+  user: User;
 }
 
 export function AIAssistantModal({
@@ -45,13 +64,14 @@ export function AIAssistantModal({
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [suggestedEvent, setSuggestedEvent] = useState<any | null>(null);
+  const [suggestedEvent, setSuggestedEvent] = useState<SuggestedEvent | null>(null);
   const [usageInfo, setUsageInfo] = useState({
     remaining: 3,
     limit: 3,
     tier: 'free' as 'free' | 'premium' | 'pro'
   });
   const [showPaywall, setShowPaywall] = useState(false);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -63,7 +83,7 @@ export function AIAssistantModal({
       try {
         const parsed = JSON.parse(stored);
         // Convert timestamp strings back to Date objects
-        const restoredMessages = parsed.map((msg: any) => ({
+        const restoredMessages: Message[] = parsed.map((msg: Omit<Message, 'timestamp'> & { timestamp: string }) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
         }));
@@ -156,18 +176,15 @@ export function AIAssistantModal({
     setError(null);
 
     try {
-      // Prepare context
-      // Normalize all events to camelCase format
-      const normalizedEvents = normalizeEvents(existingEvents);
-
+      // Prepare context — events are already camelCase from the store
       const context = {
         title: itinerary.title,
-        startDate: itinerary.start_date,
-        endDate: itinerary.end_date,
+        startDate: itinerary.startDate,
+        endDate: itinerary.endDate,
         location: itinerary.location,
         goals: itinerary.goals,
         currentDate,
-        existingEvents: normalizedEvents.map((e) => ({
+        existingEvents: existingEvents.map((e) => ({
           title: e.title,
           startTime: e.startTime,
           endTime: e.endTime,
@@ -179,12 +196,12 @@ export function AIAssistantModal({
           } : undefined
         })),
         contacts: contacts.map((c) => ({
-          firstName: c.firstName || c.first_name,
-          lastName: c.lastName || c.last_name,
-          projectCompany: c.projectCompany || c.project_company,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          projectCompany: c.projectCompany,
           position: c.position,
-          eventTitle: c.eventTitle || c.event_title,
-          dateMet: c.dateMet || c.date_met,
+          eventTitle: c.eventTitle,
+          dateMet: c.dateMet,
           notes: c.notes
         }))
       };
@@ -240,9 +257,9 @@ export function AIAssistantModal({
 
       // Recheck usage limit to get fresh data
       await checkUsageLimit();
-    } catch (error: any) {
+    } catch (error) {
       console.error('AI assistant error:', error);
-      setError(error.message || 'Failed to process your request. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to process your request. Please try again.');
 
       // Add error message
       const errorMsg: Message = {
@@ -262,11 +279,11 @@ export function AIAssistantModal({
 
     // Check if this is a delete action
     if (suggestedEvent._deleteAction) {
+      const targetTitle = suggestedEvent.eventTitle;
       // Find the event to delete
-      const normalizedEvents = normalizeEvents(existingEvents);
-      const eventToDelete = normalizedEvents.find((e) =>
-        e.title.toLowerCase().includes(suggestedEvent.eventTitle.toLowerCase()) ||
-        suggestedEvent.eventTitle.toLowerCase().includes(e.title.toLowerCase())
+      const eventToDelete = existingEvents.find((e: ItineraryEvent) =>
+        e.title.toLowerCase().includes(targetTitle.toLowerCase()) ||
+        targetTitle.toLowerCase().includes(e.title.toLowerCase())
       );
 
       if (eventToDelete) {
@@ -278,7 +295,7 @@ export function AIAssistantModal({
           const confirmMsg: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `✅ Event "${eventToDelete.title}" has been deleted from your itinerary${suggestedEvent.hasContacts ? ` along with ${suggestedEvent.contactCount} contact${suggestedEvent.contactCount > 1 ? 's' : ''}` : ''}. Anything else I can help with?`,
+            content: `✅ Event "${eventToDelete.title}" has been deleted from your itinerary${suggestedEvent.hasContacts ? ` along with ${suggestedEvent.contactCount ?? 0} contact${(suggestedEvent.contactCount ?? 0) > 1 ? 's' : ''}` : ''}. Anything else I can help with?`,
             timestamp: new Date()
           };
           setMessages((prev) => [...prev, confirmMsg]);
@@ -304,14 +321,13 @@ export function AIAssistantModal({
         setSuggestedEvent(null);
       }
     } else {
-      // Regular create event action
-      // Convert AI event format to app event format
-      const event = {
+      // Regular create event action — pass camelCase matching ItineraryEvent
+      const event: Partial<ItineraryEvent> = {
         title: suggestedEvent.title,
-        start_time: suggestedEvent.startTime,
-        end_time: suggestedEvent.endTime,
-        event_type: suggestedEvent.eventType,
-        location: suggestedEvent.location,
+        startTime: suggestedEvent.startTime,
+        endTime: suggestedEvent.endTime,
+        eventType: suggestedEvent.eventType as ItineraryEvent['eventType'],
+        location: suggestedEvent.location ? { name: suggestedEvent.location.name, address: suggestedEvent.location.address ?? '' } : undefined,
         description: suggestedEvent.description || ''
       };
 
@@ -348,8 +364,14 @@ export function AIAssistantModal({
     }
   };
 
-  const handleClearConversation = () => {
-    if (confirm('Clear conversation history? This cannot be undone.')) {
+  const handleClearConversation = async () => {
+    const confirmed = await confirm({
+      title: 'Clear conversation',
+      message: 'Clear conversation history? This cannot be undone.',
+      confirmLabel: 'Clear',
+      variant: 'danger',
+    });
+    if (confirmed) {
       setMessages([]);
       localStorage.removeItem(`ai-conversation-${itinerary.id}`);
       // Add welcome message again
@@ -368,27 +390,27 @@ export function AIAssistantModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl flex flex-col max-h-[80vh]">
+      <div className="relative w-full max-w-2xl bg-slate-800 rounded-lg shadow-xl flex flex-col max-h-[80vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" />
-            <h2 className="text-xl font-semibold text-gray-900">AI Assistant</h2>
+            <Sparkles className="w-5 h-5 text-purple-400" />
+            <h2 className="text-xl font-semibold text-white">AI Assistant</h2>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-slate-400">
               {usageInfo.remaining}/{usageInfo.limit} queries remaining
             </div>
             <button
               onClick={handleClearConversation}
-              className="text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded hover:bg-gray-100"
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-700"
               title="Clear conversation history"
             >
               Clear
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-slate-400 hover:text-slate-200 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -406,7 +428,7 @@ export function AIAssistantModal({
                 className={`max-w-[80%] rounded-lg px-4 py-2 ${
                   msg.role === 'user'
                     ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    : 'bg-slate-700 text-slate-200'
                 }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -422,8 +444,8 @@ export function AIAssistantModal({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg px-4 py-2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+              <div className="bg-slate-700 rounded-lg px-4 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
               </div>
             </div>
           )}
@@ -433,14 +455,14 @@ export function AIAssistantModal({
 
         {/* Event Confirmation */}
         {suggestedEvent && (
-          <div className={`px-6 py-4 border-t ${suggestedEvent._deleteAction ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-200'}`}>
+          <div className={`px-6 py-4 border-t ${suggestedEvent._deleteAction ? 'bg-red-900/30 border-red-700' : 'bg-purple-900/30 border-purple-700'}`}>
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900 mb-2">
+                <p className="text-sm font-medium text-white mb-2">
                   {suggestedEvent._deleteAction ? 'Confirm Deletion:' : 'Confirm Event:'}
                 </p>
                 {suggestedEvent._deleteAction ? (
-                  <div className="space-y-1 text-sm text-gray-700">
+                  <div className="space-y-1 text-sm text-slate-300">
                     <p><strong>Event:</strong> {suggestedEvent.eventTitle}</p>
                     {suggestedEvent.eventDate && (
                       <p><strong>Date:</strong> {new Date(suggestedEvent.eventDate).toLocaleDateString()}</p>
@@ -449,13 +471,13 @@ export function AIAssistantModal({
                       <p><strong>Time:</strong> {suggestedEvent.eventTime}</p>
                     )}
                     {suggestedEvent.hasContacts && (
-                      <p className="text-red-600 font-medium mt-2">
-                        ⚠️ {suggestedEvent.contactCount} contact{suggestedEvent.contactCount > 1 ? 's' : ''} will also be deleted
+                      <p className="text-red-400 font-medium mt-2">
+                        ⚠️ {suggestedEvent.contactCount ?? 0} contact{(suggestedEvent.contactCount ?? 0) > 1 ? 's' : ''} will also be deleted
                       </p>
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-1 text-sm text-gray-700">
+                  <div className="space-y-1 text-sm text-slate-300">
                     <p><strong>Title:</strong> {suggestedEvent.title}</p>
                     <p>
                       <strong>Time:</strong>{' '}
@@ -482,7 +504,7 @@ export function AIAssistantModal({
                 </button>
                 <button
                   onClick={handleCancelEvent}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 bg-slate-700 border border-slate-600 text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-600 transition-colors"
                 >
                   Cancel
                 </button>
@@ -493,8 +515,8 @@ export function AIAssistantModal({
 
         {/* Error */}
         {error && (
-          <div className="px-6 py-3 bg-red-50 border-t border-red-200">
-            <div className="flex items-center gap-2 text-sm text-red-700">
+          <div className="px-6 py-3 bg-red-900/30 border-t border-red-700">
+            <div className="flex items-center gap-2 text-sm text-red-300">
               <AlertCircle className="w-4 h-4" />
               <p>{error}</p>
             </div>
@@ -502,7 +524,7 @@ export function AIAssistantModal({
         )}
 
         {/* Input */}
-        <div className="px-6 py-4 border-t border-gray-200">
+        <div className="px-6 py-4 border-t border-slate-700">
           <div className="flex gap-2">
             <textarea
               ref={inputRef}
@@ -510,7 +532,7 @@ export function AIAssistantModal({
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type your message... (e.g., 'Add flight at 8am tomorrow')"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-slate-600 rounded-lg resize-none bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               rows={2}
               disabled={isLoading}
             />
@@ -526,7 +548,7 @@ export function AIAssistantModal({
               )}
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-slate-500 mt-2">
             Press Enter to send, Shift+Enter for new line
           </p>
         </div>
@@ -542,6 +564,8 @@ export function AIAssistantModal({
           limit: usageInfo.limit
         }}
       />
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

@@ -77,7 +77,7 @@ class SubscriptionService {
 
       // Set limits based on tier
       const limits: Record<SubscriptionTier, number> = {
-        free: 10, // 10 AI queries for testing (was 3)
+        free: 3,
         premium: 50, // 50 queries per month
         pro: -1 // Unlimited
       };

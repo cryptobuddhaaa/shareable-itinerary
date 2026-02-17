@@ -3,6 +3,22 @@
  * Handles Google Calendar API integration for importing Luma events
  */
 
+import type { ItineraryEvent } from '../models/types';
+
+export interface LumaEventsDebugInfo {
+  calendarsQueried: number;
+  calendarSources: string[];
+  totalCalendarEvents: number;
+  lumaEventsFound: number;
+  nonMatchingEvents?: Array<{
+    summary: string;
+    organizer: string;
+    hasDescription: boolean;
+    descriptionSnippet: string | null;
+    attendeeEmails: string[];
+  }>;
+}
+
 export interface GoogleCalendarEvent {
   id: string;
   summary: string;
@@ -80,13 +96,12 @@ class GoogleCalendarService {
 
   /**
    * Fetches Luma events from Google Calendar
-   * Only returns events where organizer email is "calendar-invite@lu.ma"
    */
   async fetchLumaEvents(
     accessToken: string,
     timeMin?: string,
     timeMax?: string
-  ): Promise<GoogleCalendarEvent[]> {
+  ): Promise<{ events: GoogleCalendarEvent[]; debug?: LumaEventsDebugInfo }> {
     const response = await fetch('/api/google-calendar/luma-events', {
       method: 'POST',
       headers: {
@@ -104,40 +119,41 @@ class GoogleCalendarService {
       throw new Error(error.error || 'Failed to fetch Luma events');
     }
 
-    return response.json();
+    const data = await response.json();
+    return {
+      events: data.events || [],
+      debug: data.debug,
+    };
   }
 
   /**
-   * Converts Google Calendar event to our ItineraryEvent format
+   * Converts Google Calendar event to our ItineraryEvent format (camelCase)
    */
-  convertToItineraryEvent(gcalEvent: GoogleCalendarEvent): any {
-    const startTime = gcalEvent.start.dateTime || gcalEvent.start.date;
-    const endTime = gcalEvent.end.dateTime || gcalEvent.end.date;
+  convertToItineraryEvent(gcalEvent: GoogleCalendarEvent): ItineraryEvent {
+    const startTime = gcalEvent.start.dateTime || gcalEvent.start.date || '';
+    const endTime = gcalEvent.end.dateTime || gcalEvent.end.date || '';
 
-    // Extract Luma URL from description if present
+    // Extract Luma URL from description if present (lu.ma/..., luma.com/event/..., www.luma.com/event/...)
     let lumaEventUrl: string | undefined;
     if (gcalEvent.description) {
-      const lumaUrlMatch = gcalEvent.description.match(/https?:\/\/lu\.ma\/[^\s<>)]+/);
+      const lumaUrlMatch = gcalEvent.description.match(/https?:\/\/(?:lu\.ma\/[^\s<>)]+|(?:www\.)?luma\.com\/event\/[^\s<>)]+)/);
       if (lumaUrlMatch) {
         lumaEventUrl = lumaUrlMatch[0];
       }
     }
 
     return {
+      id: gcalEvent.id,
       title: gcalEvent.summary,
-      start_time: startTime,
-      end_time: endTime,
-      event_type: 'side-event', // Default to side-event for Luma events
-      location: gcalEvent.location ? {
-        name: gcalEvent.location,
-        address: gcalEvent.location
-      } : undefined,
+      startTime,
+      endTime,
+      eventType: 'side-event',
+      location: gcalEvent.location
+        ? { name: gcalEvent.location, address: gcalEvent.location }
+        : { name: '', address: '' },
       description: gcalEvent.description || '',
-      luma_event_url: lumaEventUrl,
-      // Mark as imported from Google Calendar
-      _imported_from: 'google_calendar',
-      _gcal_event_id: gcalEvent.id,
-      _gcal_link: gcalEvent.htmlLink
+      lumaEventUrl,
+      notes: [],
     };
   }
 

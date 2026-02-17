@@ -16,9 +16,22 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing or invalid url parameter' });
   }
 
-  // Validate it's actually a Luma URL
-  if (!url.includes('lu.ma') && !url.includes('luma.com')) {
+  // Validate it's actually a Luma URL using proper URL parsing
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  if (hostname !== 'lu.ma' && !hostname.endsWith('.lu.ma') &&
+      hostname !== 'luma.com' && !hostname.endsWith('.luma.com')) {
     return res.status(400).json({ error: 'URL must be from lu.ma or luma.com' });
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    return res.status(400).json({ error: 'URL must use HTTPS' });
   }
 
   try {
@@ -169,7 +182,7 @@ function parseEventHtml(html: string): LumaEventData | null {
 
         // Handle both single Event and array of schemas
         const eventSchema = Array.isArray(jsonData)
-          ? jsonData.find((item: any) => item['@type'] === 'Event')
+          ? jsonData.find((item: Record<string, unknown>) => item['@type'] === 'Event')
           : (jsonData['@type'] === 'Event' ? jsonData : null);
 
         if (eventSchema) {
@@ -200,7 +213,6 @@ function parseEventHtml(html: string): LumaEventData | null {
             description: eventSchema.description ? decodeHtmlEntities(eventSchema.description) : (descMatch ? decodeHtmlEntities(descMatch[1]) : undefined),
           };
 
-          console.log('Parsed event data:', eventData); // Debug log
           break; // Found event data, stop looking
         }
       } catch (e) {
@@ -266,7 +278,6 @@ function parseEventHtml(html: string): LumaEventData | null {
         description,
       };
 
-      console.log('Fallback parsed event data:', eventData); // Debug log
     }
 
     return eventData;

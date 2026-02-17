@@ -2,13 +2,103 @@
  * Vercel Serverless Function: Fetch Luma events from Google Calendar
  * POST /api/google-calendar/luma-events
  *
- * Filters Google Calendar events to only return those organized by Luma
- * (organizer email: calendar-invite@lu.ma)
+ * Queries ALL calendars in the user's account (not just primary).
+ * Filters Google Calendar events to only return those from Luma.
+ * Detection methods (any match = Luma event):
+ *   1. Organizer email is calendar-invite@lu.ma or contains lu.ma
+ *   2. Any attendee has an @lu.ma email address
+ *   3. Description contains a lu.ma or luma.com URL/reference
+ *   4. Location contains a lu.ma or luma.com URL/reference
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const LUMA_ORGANIZER_EMAIL = 'calendar-invite@lu.ma';
+interface GoogleCalendarItem {
+  id: string;
+  summary: string;
+  description?: string;
+  start: { dateTime?: string; date?: string; timeZone?: string };
+  end: { dateTime?: string; date?: string; timeZone?: string };
+  location?: string;
+  organizer?: { email: string; displayName?: string };
+  htmlLink?: string;
+  attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>;
+}
+
+interface CalendarListEntry {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  accessRole: string;
+}
+
+// Matches any luma.com path or lu.ma short links
+const LUMA_URL_PATTERN = /https?:\/\/(?:(?:www\.)?luma\.com\/|lu\.ma\/)/i;
+// Simple substring check as a fallback
+const LUMA_DOMAIN_PATTERN = /(?:lu\.ma|luma\.com)\//i;
+
+function isLumaEvent(event: GoogleCalendarItem): boolean {
+  // Check 1: organizer email from lu.ma
+  const organizerEmail = event.organizer?.email?.toLowerCase() || '';
+  if (organizerEmail.includes('lu.ma')) {
+    return true;
+  }
+
+  // Check 2: any attendee has an @lu.ma email
+  if (event.attendees?.some((a) => a.email?.toLowerCase().endsWith('@lu.ma'))) {
+    return true;
+  }
+
+  // Check 3: description contains a Luma URL or domain reference
+  if (event.description && (LUMA_URL_PATTERN.test(event.description) || LUMA_DOMAIN_PATTERN.test(event.description))) {
+    return true;
+  }
+
+  // Check 4: location contains a Luma URL
+  if (event.location && (LUMA_URL_PATTERN.test(event.location) || LUMA_DOMAIN_PATTERN.test(event.location))) {
+    return true;
+  }
+
+  return false;
+}
+
+async function fetchEventsFromCalendar(
+  calendarId: string,
+  accessToken: string,
+  timeMin?: string,
+  timeMax?: string
+): Promise<GoogleCalendarItem[]> {
+  const calendarApiUrl = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+  );
+
+  calendarApiUrl.searchParams.append('maxResults', '2500');
+  calendarApiUrl.searchParams.append('singleEvents', 'true');
+  calendarApiUrl.searchParams.append('orderBy', 'startTime');
+
+  if (timeMin) {
+    calendarApiUrl.searchParams.append('timeMin', timeMin);
+  }
+  if (timeMax) {
+    calendarApiUrl.searchParams.append('timeMax', timeMax);
+  }
+
+  const response = await fetch(calendarApiUrl.toString(), {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    // Log but don't fail — some calendars may not be accessible
+    console.warn(`Failed to fetch events from calendar ${calendarId}: ${response.status}`);
+    return [];
+  }
+
+  const data = await response.json();
+  return data.items || [];
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
@@ -23,66 +113,83 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Access token is required' });
     }
 
-    // Build Google Calendar API URL
-    const calendarApiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+    // Step 1: Get list of all calendars
+    const calendarListResponse = await fetch(
+      'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+        },
+      }
+    );
 
-    // Add query parameters
-    calendarApiUrl.searchParams.append('maxResults', '2500');
-    calendarApiUrl.searchParams.append('singleEvents', 'true');
-    calendarApiUrl.searchParams.append('orderBy', 'startTime');
+    if (!calendarListResponse.ok) {
+      const error = await calendarListResponse.text();
+      console.error('Calendar list API error:', error);
 
-    if (timeMin) {
-      calendarApiUrl.searchParams.append('timeMin', timeMin);
-    }
-    if (timeMax) {
-      calendarApiUrl.searchParams.append('timeMax', timeMax);
-    }
-
-    // Fetch events from Google Calendar
-    const calendarResponse = await fetch(calendarApiUrl.toString(), {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!calendarResponse.ok) {
-      const error = await calendarResponse.text();
-      console.error('Google Calendar API error:', error);
-
-      if (calendarResponse.status === 401) {
+      if (calendarListResponse.status === 401) {
         return res.status(401).json({
           error: 'Access token expired or invalid. Please reconnect.',
         });
       }
 
-      return res.status(500).json({ error: 'Failed to fetch calendar events' });
+      return res.status(500).json({ error: 'Failed to fetch calendar list' });
     }
 
-    const data = await calendarResponse.json();
-    const allEvents = data.items || [];
+    const calendarListData = await calendarListResponse.json();
+    const calendars: CalendarListEntry[] = calendarListData.items || [];
 
-    // Log first few organizer emails for debugging
-    console.log('Sample organizer emails:', allEvents.slice(0, 5).map((e: any) => ({
-      title: e.summary,
-      organizer: e.organizer?.email
-    })));
+    // Step 2: Fetch events from all calendars in parallel
+    const eventsByCalendar = await Promise.all(
+      calendars.map(async (cal) => {
+        const events = await fetchEventsFromCalendar(cal.id, accessToken, timeMin, timeMax);
+        return { calendarId: cal.id, calendarName: cal.summary, events };
+      })
+    );
 
-    // Filter to only Luma events (organizer email matches)
-    const lumaEvents = allEvents.filter((event: any) => {
-      const organizerEmail = event.organizer?.email?.toLowerCase();
-      const isLuma = organizerEmail === LUMA_ORGANIZER_EMAIL.toLowerCase();
+    // Step 3: Merge all events, deduplicate by event ID
+    const seenIds = new Set<string>();
+    const allEvents: GoogleCalendarItem[] = [];
+    const calendarSources: string[] = [];
 
-      // Also try matching if organizer email contains 'lu.ma'
-      const isLumaVariant = organizerEmail?.includes('lu.ma');
+    for (const { calendarName, events } of eventsByCalendar) {
+      if (events.length > 0) {
+        calendarSources.push(`${calendarName} (${events.length})`);
+      }
+      for (const event of events) {
+        if (!seenIds.has(event.id)) {
+          seenIds.add(event.id);
+          allEvents.push(event);
+        }
+      }
+    }
 
-      return isLuma || isLumaVariant;
+    // Step 4: Filter to only Luma events
+    const lumaEvents = allEvents.filter(isLumaEvent);
+    const nonMatchingEvents = allEvents.filter((e) => !isLumaEvent(e));
+
+    // Always include debug info about non-matching events
+    const nonMatchingSamples = nonMatchingEvents.slice(0, 10).map((e) => ({
+      summary: e.summary,
+      organizer: e.organizer?.email || 'none',
+      hasDescription: !!e.description,
+      descriptionSnippet: e.description
+        ? e.description.substring(0, 500)
+        : null,
+      attendeeEmails: e.attendees?.map((a) => a.email).slice(0, 5) || [],
+    }));
+
+    return res.status(200).json({
+      events: lumaEvents,
+      debug: {
+        calendarsQueried: calendars.length,
+        calendarSources,
+        totalCalendarEvents: allEvents.length,
+        lumaEventsFound: lumaEvents.length,
+        nonMatchingEvents: nonMatchingSamples,
+      },
     });
-
-    console.log(`Found ${allEvents.length} total events, ${lumaEvents.length} Luma events`);
-    console.log('Luma event titles:', lumaEvents.map((e: any) => e.summary));
-
-    return res.status(200).json(lumaEvents);
   } catch (error) {
     console.error('Error in luma-events:', error);
     return res.status(500).json({ error: 'Internal server error' });

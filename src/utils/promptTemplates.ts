@@ -2,7 +2,9 @@
  * Prompt templates for AI assistant
  */
 
-interface ItineraryContext {
+import type { Itinerary, ItineraryEvent, Contact } from '../models/types';
+
+export interface ItineraryContext {
   title: string;
   startDate: string;
   endDate: string;
@@ -25,8 +27,8 @@ interface ItineraryContext {
     lastName: string;
     projectCompany?: string;
     position?: string;
-    eventTitle: string;
-    dateMet: string;
+    eventTitle?: string;
+    dateMet?: string;
     notes?: string;
   }>;
 }
@@ -52,7 +54,8 @@ export function getEventCreationPrompt(
         const date = c.dateMet ? new Date(c.dateMet).toISOString().split('T')[0] : 'Unknown date';
         const company = c.projectCompany ? ` (${c.projectCompany})` : '';
         const position = c.position ? ` - ${c.position}` : '';
-        return `- ${c.firstName} ${c.lastName}${company}${position} - Met at "${c.eventTitle}" on ${date}`;
+        const event = c.eventTitle ? ` - Met at "${c.eventTitle}"` : '';
+        return `- ${c.firstName} ${c.lastName}${company}${position}${event} on ${date}`;
       }).join('\n')
     : 'No contacts added yet';
 
@@ -392,21 +395,21 @@ Now parse the user's message and return ONLY valid JSON with no additional text.
 }
 
 export function getAnalysisPrompt(
-  itinerary: any,
-  events: any[]
+  itinerary: Itinerary,
+  events: ItineraryEvent[]
 ): string {
   const eventsSummary = events.map((e) => ({
     title: e.title,
-    start: e.start_time,
-    end: e.end_time,
-    type: e.event_type,
+    start: e.startTime,
+    end: e.endTime,
+    type: e.eventType,
     location: e.location?.name
   }));
 
   return `You are analyzing an itinerary for potential conflicts and optimization opportunities.
 
 Itinerary: "${itinerary.title}"
-Dates: ${itinerary.start_date} to ${itinerary.end_date}
+Dates: ${itinerary.startDate} to ${itinerary.endDate}
 Location: ${itinerary.location}
 ${itinerary.goals ? `Goals: ${itinerary.goals}` : ''}
 
@@ -449,13 +452,13 @@ Return a JSON object with this structure:
 }
 
 export function getContactBriefingPrompt(
-  event: any,
-  contacts: any[]
+  event: ItineraryEvent,
+  contacts: Contact[]
 ): string {
   return `Generate a briefing for an upcoming meeting.
 
 Event: "${event.title}"
-Time: ${event.start_time} to ${event.end_time}
+Time: ${event.startTime} to ${event.endTime}
 Location: ${event.location?.name || 'TBD'}
 
 Attendees/Contacts:
