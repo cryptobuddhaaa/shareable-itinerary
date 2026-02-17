@@ -64,14 +64,14 @@ export function ConfirmDialog({
         <div className="flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+            className="px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors"
           >
             {cancelLabel}
           </button>
           <button
             ref={confirmRef}
             onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${confirmStyles}`}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${confirmStyles}`}
           >
             {confirmLabel}
           </button>

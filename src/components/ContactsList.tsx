@@ -107,7 +107,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
           >
             <div className="flex justify-between items-start mb-3">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-base font-semibold text-white">
                   {contact.firstName} {contact.lastName}
                 </h3>
                 {contact.projectCompany && (
@@ -120,7 +120,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
               <div className="flex gap-1">
                 <button
                   onClick={() => handleMarkContacted(contact)}
-                  className="text-green-400 hover:text-green-300 p-1"
+                  className="text-green-400 hover:text-green-300 p-1.5"
                   title="Mark as contacted"
                   aria-label="Mark as contacted"
                 >
@@ -135,7 +135,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </button>
                 <button
                   onClick={() => setEditingContact(contact)}
-                  className="text-blue-400 hover:text-blue-300 p-1"
+                  className="text-blue-400 hover:text-blue-300 p-1.5"
                   title="Edit contact"
                   aria-label="Edit contact"
                 >
@@ -150,7 +150,7 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </button>
                 <button
                   onClick={() => handleDelete(contact)}
-                  className="text-red-400 hover:text-red-300 p-1"
+                  className="text-red-400 hover:text-red-300 p-1.5"
                   title="Delete contact"
                   aria-label="Delete contact"
                 >

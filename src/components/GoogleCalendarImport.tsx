@@ -163,7 +163,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       {!isConnected ? (
         <button
           onClick={handleConnect}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors shadow-sm"
         >
           <Calendar className="w-4 h-4" />
           Connect Google Calendar
@@ -174,7 +174,7 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
             <button
               onClick={handleFetchLumaEvents}
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -271,14 +271,14 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
                   setShowPreview(false);
                   setSelectedEvents(new Set());
                 }}
-                className="px-4 py-2 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition-colors"
+                className="px-3 py-1.5 text-slate-300 border border-slate-600 rounded-lg hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleImport}
                 disabled={selectedEvents.size === 0 || isLoading}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLoading ? (
                   <>

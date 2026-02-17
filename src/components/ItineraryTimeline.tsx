@@ -197,7 +197,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
       <div className="bg-slate-800 shadow rounded-lg p-6 mb-6">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold text-white">{itinerary.title}</h2>
+            <h2 className="text-xl font-bold text-white">{itinerary.title}</h2>
             <p className="text-slate-300 mt-1">{itinerary.location}</p>
             <p className="text-sm text-slate-400 mt-1">
               {formatDate(itinerary.startDate)} - {formatDate(itinerary.endDate)}
@@ -210,7 +210,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setShowAIAssistant(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-purple-500"
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-purple-500"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -231,7 +231,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                   });
                   if (confirmed) clearItinerary();
                 }}
-                className="text-sm text-red-400 hover:text-red-300 px-4 py-2"
+                className="text-sm text-red-400 hover:text-red-300 px-3 py-1.5"
               >
                 Clear Itinerary
               </button>
@@ -260,7 +260,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
                 <div>
-                  <h3 className="text-xl font-semibold text-white">
+                  <h3 className="text-lg font-semibold text-white">
                     Day {day.dayNumber}: {formatDate(day.date)}
                   </h3>
                   {day.goals.length > 0 && (
@@ -277,7 +277,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                   setSelectedDay(day);
                   setShowEventForm(true);
                 }}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-300 bg-blue-900/40 hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500"
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-blue-300 bg-blue-900/40 hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500"
               >
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -355,11 +355,11 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                           onClick={() => {
                             setAddingContactFor({ event, dayDate: day.date });
                           }}
-                          className="text-green-400 hover:text-green-300 p-2"
+                          className="text-green-400 hover:text-green-300 p-1.5"
                           title="Add contact from this event"
                           aria-label="Add contact from this event"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                           </svg>
                         </button>
@@ -367,21 +367,21 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
                           onClick={() => {
                             setEditingEvent({ event, dayDate: day.date });
                           }}
-                          className="text-blue-400 hover:text-blue-300 p-2"
+                          className="text-blue-400 hover:text-blue-300 p-1.5"
                           title="Edit event"
                           aria-label="Edit event"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         <button
                           onClick={() => handleDeleteEvent(event)}
-                          className="text-red-400 hover:text-red-300 p-2"
+                          className="text-red-400 hover:text-red-300 p-1.5"
                           title="Delete event"
                           aria-label="Delete event"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
@@ -405,7 +405,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
             className="w-full flex items-center justify-between mb-4 hover:bg-slate-700 p-2 rounded-lg transition-colors"
           >
             <div>
-              <h3 className="text-xl font-semibold text-white text-left">Contacts from this Trip</h3>
+              <h3 className="text-lg font-semibold text-white text-left">Contacts from this Trip</h3>
               <p className="text-sm text-slate-400 mt-1 text-left">
                 People you've connected with during this trip
               </p>

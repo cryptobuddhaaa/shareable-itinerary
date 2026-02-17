@@ -44,7 +44,7 @@ export default function ItineraryForm() {
 
   return (
     <div className="bg-slate-800 shadow rounded-lg p-6">
-      <h2 className="text-2xl font-semibold text-white mb-6">Create New Itinerary</h2>
+      <h2 className="text-xl font-bold text-white mb-6">Create New Itinerary</h2>
       {errors.form && (
         <div className="mb-4 bg-red-900/30 border border-red-700 rounded-md p-4">
           <p className="text-sm text-red-300">{errors.form}</p>
@@ -136,7 +136,7 @@ export default function ItineraryForm() {
 
         <button
           type="submit"
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500"
+          className="w-full flex justify-center py-1.5 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500"
         >
           Create Itinerary
         </button>

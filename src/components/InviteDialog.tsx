@@ -251,20 +251,20 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={handleCopyAndOpen}
-                  className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   Copy Message & Open DM
                 </button>
                 <div className="flex gap-2">
                   <button
                     onClick={handleMarkSentAndNext}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
                     {sendIndex + 1 < selectedContacts.length ? 'Sent! Next' : 'Sent! Done'}
                   </button>
                   <button
                     onClick={handleSkip}
-                    className="px-4 py-2 border border-slate-600 text-slate-300 text-sm rounded-md hover:bg-slate-700"
+                    className="px-3 py-1.5 border border-slate-600 text-slate-300 text-sm rounded-md hover:bg-slate-700"
                   >
                     Skip
                   </button>
@@ -293,7 +293,7 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
           <div className="flex justify-between p-4 border-t border-slate-700">
             <button
               onClick={step === 'select' ? onClose : () => setStep('select')}
-              className="px-4 py-2 text-sm text-slate-300 hover:text-white"
+              className="px-3 py-1.5 text-sm text-slate-300 hover:text-white"
             >
               {step === 'select' ? 'Cancel' : 'Back'}
             </button>
@@ -314,7 +314,7 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
                   setStep('send');
                 }
               }}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
               disabled={step === 'select' && selectedIds.size === 0}
             >
               {step === 'select' ? `Next (${selectedIds.size} selected)` : 'Start Sending'}

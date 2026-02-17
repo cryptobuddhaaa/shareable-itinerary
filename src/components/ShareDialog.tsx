@@ -87,7 +87,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
                 />
                 <button
                   onClick={handleCopy}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-slate-800 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-slate-800 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   {copied ? (
                     <>
@@ -123,7 +123,7 @@ export default function ShareDialog({ itinerary, onClose }: ShareDialogProps) {
           <div className="flex justify-end pt-4">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-slate-800 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-3 py-1.5 border border-slate-600 rounded-md shadow-sm text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-slate-800 focus:ring-offset-2 focus:ring-blue-500"
             >
               Close
             </button>
