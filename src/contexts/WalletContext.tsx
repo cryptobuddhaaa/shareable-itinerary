@@ -11,6 +11,8 @@ initializeSolflare();
 import {
   registerMwa,
   createDefaultWalletNotFoundHandler,
+  createDefaultAuthorizationCache,
+  createDefaultChainSelector,
 } from '@solana-mobile/wallet-standard-mobile';
 
 registerMwa({
@@ -18,6 +20,9 @@ registerMwa({
     name: 'Shareable Itinerary',
     uri: typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
   },
+  authorizationCache: createDefaultAuthorizationCache(),
+  chains: ['solana:devnet' as const],
+  chainSelector: createDefaultChainSelector(),
   onWalletNotFound: createDefaultWalletNotFoundHandler(),
 });
 
