@@ -7,7 +7,7 @@ import { clusterApiUrl } from '@solana/web3.js';
 import { initialize as initializeSolflare } from '@solflare-wallet/wallet-adapter';
 initializeSolflare();
 
-// Register Mobile Wallet Adapter for Android MWA support
+// Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
 import {
   registerMwa,
   createDefaultWalletNotFoundHandler,
@@ -15,16 +15,22 @@ import {
   createDefaultChainSelector,
 } from '@solana-mobile/wallet-standard-mobile';
 
-registerMwa({
-  appIdentity: {
-    name: 'Shareable Itinerary',
-    uri: typeof window !== 'undefined' ? window.location.origin : 'https://localhost',
-  },
-  authorizationCache: createDefaultAuthorizationCache(),
-  chains: ['solana:devnet' as const],
-  chainSelector: createDefaultChainSelector(),
-  onWalletNotFound: createDefaultWalletNotFoundHandler(),
-});
+if (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)) {
+  try {
+    registerMwa({
+      appIdentity: {
+        name: 'Shareable Itinerary',
+        uri: window.location.origin,
+      },
+      authorizationCache: createDefaultAuthorizationCache(),
+      chains: ['solana:devnet' as const],
+      chainSelector: createDefaultChainSelector(),
+      onWalletNotFound: createDefaultWalletNotFoundHandler(),
+    });
+  } catch {
+    // MWA not available on this device
+  }
+}
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
