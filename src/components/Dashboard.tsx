@@ -1,0 +1,310 @@
+/**
+ * Dashboard — shows trust score breakdown, points total, and handshake history.
+ */
+
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { useHandshakes } from '../hooks/useHandshakes';
+import { useUserWallet } from '../hooks/useUserWallet';
+import type { TrustScore } from '../models/types';
+
+interface PointEntry {
+  id: string;
+  points: number;
+  reason: string;
+  createdAt: string;
+}
+
+function mapRowToPoint(row: Record<string, unknown>): PointEntry {
+  return {
+    id: row.id as string,
+    points: row.points as number,
+    reason: row.reason as string,
+    createdAt: row.created_at as string,
+  };
+}
+
+function mapRowToTrust(row: Record<string, unknown>): TrustScore {
+  return {
+    userId: row.user_id as string,
+    telegramPremium: row.telegram_premium as boolean,
+    hasProfilePhoto: row.has_profile_photo as boolean,
+    hasUsername: row.has_username as boolean,
+    telegramAccountAgeDays: row.telegram_account_age_days as number | null,
+    walletConnected: row.wallet_connected as boolean,
+    totalHandshakes: row.total_handshakes as number,
+    trustLevel: row.trust_level as number,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+function TrustLevelBadge({ level }: { level: number }) {
+  const config: Record<number, { label: string; color: string; bg: string }> = {
+    1: { label: 'Newcomer', color: 'text-slate-300', bg: 'bg-slate-700' },
+    2: { label: 'Verified', color: 'text-blue-300', bg: 'bg-blue-900/40' },
+    3: { label: 'Trusted', color: 'text-green-300', bg: 'bg-green-900/40' },
+    4: { label: 'Established', color: 'text-purple-300', bg: 'bg-purple-900/40' },
+    5: { label: 'Champion', color: 'text-yellow-300', bg: 'bg-yellow-900/40' },
+  };
+  const c = config[level] || config[1];
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${c.bg} ${c.color}`}>
+      {'★'.repeat(level)}{'☆'.repeat(5 - level)} {c.label}
+    </span>
+  );
+}
+
+function SignalRow({ label, active, points }: { label: string; active: boolean; points: string }) {
+  return (
+    <div className="flex items-center justify-between py-2">
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${active ? 'bg-green-400' : 'bg-slate-600'}`} />
+        <span className={active ? 'text-slate-200' : 'text-slate-500'}>{label}</span>
+      </div>
+      <span className={`text-xs font-mono ${active ? 'text-green-400' : 'text-slate-600'}`}>
+        {active ? points : '+0'}
+      </span>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const { handshakes } = useHandshakes();
+  const { getPrimaryWallet } = useUserWallet();
+  const [trustScore, setTrustScore] = useState<TrustScore | null>(null);
+  const [pointEntries, setPointEntries] = useState<PointEntry[]>([]);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const wallet = getPrimaryWallet();
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadData = async () => {
+      setLoading(true);
+
+      // Load trust score
+      const { data: trustData } = await supabase
+        .from('trust_scores')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (trustData) {
+        setTrustScore(mapRowToTrust(trustData));
+      }
+
+      // Load point entries
+      const { data: pointsData } = await supabase
+        .from('user_points')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (pointsData) {
+        const entries = pointsData.map(mapRowToPoint);
+        setPointEntries(entries);
+        setTotalPoints(entries.reduce((sum, e) => sum + e.points, 0));
+      }
+
+      setLoading(false);
+    };
+
+    loadData();
+  }, [user]);
+
+  const pendingHandshakes = handshakes.filter((h) => h.status === 'pending');
+  const matchedHandshakes = handshakes.filter((h) => h.status === 'matched');
+  const mintedHandshakes = handshakes.filter((h) => h.status === 'minted');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard label="Trust Level" value={trustScore ? `${trustScore.trustLevel}/5` : '--'} color="purple" />
+        <StatCard label="Total Points" value={totalPoints.toString()} color="green" />
+        <StatCard label="Handshakes" value={mintedHandshakes.length.toString()} color="blue" />
+        <StatCard
+          label="Wallet"
+          value={wallet ? `${wallet.walletAddress.slice(0, 4)}...${wallet.walletAddress.slice(-4)}` : 'Not linked'}
+          color={wallet ? 'green' : 'slate'}
+        />
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-6">
+        {/* Trust Score Breakdown */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Trust Score</h3>
+            {trustScore && <TrustLevelBadge level={trustScore.trustLevel} />}
+          </div>
+
+          {trustScore ? (
+            <div className="divide-y divide-slate-700/50">
+              <SignalRow label="Telegram Premium" active={trustScore.telegramPremium} points="+2.0" />
+              <SignalRow label="Profile Photo" active={trustScore.hasProfilePhoto} points="+0.5" />
+              <SignalRow label="Telegram Username" active={trustScore.hasUsername} points="+0.5" />
+              <SignalRow
+                label={`Account Age ${trustScore.telegramAccountAgeDays ? `(${Math.floor(trustScore.telegramAccountAgeDays / 365)}y)` : ''}`}
+                active={!!trustScore.telegramAccountAgeDays && trustScore.telegramAccountAgeDays > 365}
+                points="+0.5"
+              />
+              <SignalRow label="Verified Wallet" active={trustScore.walletConnected} points="+0.5" />
+              <SignalRow label="3+ Handshakes" active={trustScore.totalHandshakes >= 3} points="+0.5" />
+
+              <div className="flex items-center justify-between pt-3 mt-1">
+                <span className="text-white font-medium">Computed Score</span>
+                <span className="text-white font-mono font-bold">{trustScore.trustLevel}/5</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-slate-400">No trust data yet.</p>
+              <p className="text-slate-500 text-sm mt-1">Link your Telegram account to get started.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Handshake Status */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <h3 className="text-lg font-semibold text-white mb-4">Handshakes</h3>
+
+          <div className="space-y-3 mb-4">
+            <HandshakeStatRow label="Pending" count={pendingHandshakes.length} color="yellow" />
+            <HandshakeStatRow label="Matched" count={matchedHandshakes.length} color="blue" />
+            <HandshakeStatRow label="Minted" count={mintedHandshakes.length} color="green" />
+          </div>
+
+          {handshakes.length > 0 ? (
+            <div className="border-t border-slate-700 pt-3 mt-3">
+              <h4 className="text-sm font-medium text-slate-400 mb-2">Recent</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {handshakes.slice(0, 8).map((h) => (
+                  <div key={h.id} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <StatusDot status={h.status} />
+                      <span className="text-slate-300 truncate">
+                        {h.eventTitle || h.receiverIdentifier || 'Handshake'}
+                      </span>
+                    </div>
+                    <span className="text-slate-500 text-xs whitespace-nowrap ml-2">
+                      {new Date(h.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-slate-400 text-sm">No handshakes yet.</p>
+              <p className="text-slate-500 text-xs mt-1">Go to Contacts and tap "Handshake" on a contact.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Points History */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Points History</h3>
+          <span className="text-green-400 font-mono font-bold text-lg">{totalPoints} pts</span>
+        </div>
+
+        {pointEntries.length > 0 ? (
+          <div className="divide-y divide-slate-700/50">
+            {pointEntries.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between py-2.5">
+                <div>
+                  <p className="text-sm text-slate-200">{entry.reason}</p>
+                  <p className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
+                </div>
+                <span className="text-green-400 font-mono font-medium">+{entry.points}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <svg className="w-10 h-10 mx-auto text-slate-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-slate-400 text-sm">No points earned yet.</p>
+            <p className="text-slate-500 text-xs mt-1">Complete handshakes to earn points.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
+  const colorMap: Record<string, string> = {
+    purple: 'border-purple-700/50 bg-purple-900/20',
+    green: 'border-green-700/50 bg-green-900/20',
+    blue: 'border-blue-700/50 bg-blue-900/20',
+    slate: 'border-slate-700 bg-slate-800',
+  };
+  const textMap: Record<string, string> = {
+    purple: 'text-purple-300',
+    green: 'text-green-300',
+    blue: 'text-blue-300',
+    slate: 'text-slate-400',
+  };
+
+  return (
+    <div className={`rounded-xl border p-4 ${colorMap[color] || colorMap.slate}`}>
+      <p className="text-xs text-slate-400 uppercase tracking-wide">{label}</p>
+      <p className={`text-xl font-bold mt-1 font-mono ${textMap[color] || textMap.slate}`}>{value}</p>
+    </div>
+  );
+}
+
+function HandshakeStatRow({ label, count, color }: { label: string; count: number; color: string }) {
+  const dotColors: Record<string, string> = {
+    yellow: 'bg-yellow-400',
+    blue: 'bg-blue-400',
+    green: 'bg-green-400',
+  };
+  const barColors: Record<string, string> = {
+    yellow: 'bg-yellow-900/30',
+    blue: 'bg-blue-900/30',
+    green: 'bg-green-900/30',
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`w-2 h-2 rounded-full ${dotColors[color]}`} />
+      <span className="text-sm text-slate-300 w-20">{label}</span>
+      <div className="flex-1 h-2 rounded-full bg-slate-700 overflow-hidden">
+        {count > 0 && (
+          <div
+            className={`h-full rounded-full ${barColors[color]}`}
+            style={{ width: `${Math.min(100, count * 20)}%` }}
+          />
+        )}
+      </div>
+      <span className="text-sm font-mono text-slate-400 w-8 text-right">{count}</span>
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    pending: 'bg-yellow-400',
+    matched: 'bg-blue-400',
+    minted: 'bg-green-400',
+    expired: 'bg-red-400',
+  };
+  return <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors[status] || 'bg-slate-500'}`} />;
+}

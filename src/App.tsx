@@ -16,8 +16,9 @@ import { WalletButton } from './components/WalletButton';
 import { useUserWallet } from './hooks/useUserWallet';
 import { useHandshakes } from './hooks/useHandshakes';
 import { HandshakeClaimPage } from './components/HandshakeClaimPage';
+import Dashboard from './components/Dashboard';
 
-type ActiveTab = 'itinerary' | 'contacts' | 'shared';
+type ActiveTab = 'itinerary' | 'contacts' | 'shared' | 'dashboard';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -414,6 +415,16 @@ function App() {
                 >
                   Contacts
                 </button>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
+                    activeTab === 'dashboard'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                  }`}
+                >
+                  Dashboard
+                </button>
               </nav>
             </div>
 
@@ -564,6 +575,8 @@ function App() {
             )}
 
             {activeTab === 'contacts' && <ContactsPage />}
+
+            {activeTab === 'dashboard' && <Dashboard />}
           </div>
         )}
       </main>
@@ -609,6 +622,17 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Contacts
+            </button>
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex-1 flex flex-col items-center py-2 text-xs ${
+                activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-400'
+              }`}
+            >
+              <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Stats
             </button>
           </div>
         </nav>
