@@ -2425,7 +2425,7 @@ async function showContactsList(
 ) {
   let query = supabase
     .from('contacts')
-    .select('first_name, last_name, telegram_handle, project_company, event_title, last_contacted_at, tags')
+    .select('id, first_name, last_name, telegram_handle, project_company, event_title, last_contacted_at, tags')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -2443,9 +2443,31 @@ async function showContactsList(
     return;
   }
 
+  // Fetch last 3 notes per contact in a single query
+  const contactIds = contacts.map((c) => c.id as string);
+  const { data: allNotes } = await supabase
+    .from('contact_notes')
+    .select('contact_id, content, created_at')
+    .in('contact_id', contactIds)
+    .order('created_at', { ascending: false });
+
+  // Group notes by contact_id, keeping only the 3 most recent
+  const notesByContact = new Map<string, Array<{ content: string; created_at: string }>>();
+  if (allNotes) {
+    for (const n of allNotes) {
+      const cid = n.contact_id as string;
+      const list = notesByContact.get(cid) || [];
+      if (list.length < 3) {
+        list.push({ content: n.content as string, created_at: n.created_at as string });
+        notesByContact.set(cid, list);
+      }
+    }
+  }
+
   let message = `📋 <b>${label}</b> (${contacts.length} contact${contacts.length !== 1 ? 's' : ''})\n\n`;
 
   for (const c of contacts) {
+    const cId = c.id as string;
     const name = `${c.first_name} ${c.last_name || ''}`.trim();
     const company = c.project_company ? ` — ${c.project_company}` : '';
     const handle = c.telegram_handle ? c.telegram_handle.replace('@', '') : '';
@@ -2471,6 +2493,15 @@ async function showContactsList(
     const cTags = Array.isArray(c.tags) ? c.tags as string[] : [];
     if (cTags.length > 0) {
       message += `    🏷 ${cTags.join(', ')}\n`;
+    }
+
+    const notes = notesByContact.get(cId);
+    if (notes && notes.length > 0) {
+      for (const note of notes) {
+        const noteDate = new Date(note.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const preview = note.content.length > 60 ? note.content.substring(0, 57) + '...' : note.content;
+        message += `    📝 <i>${noteDate}: ${preview}</i>\n`;
+      }
     }
 
     message += '\n';
