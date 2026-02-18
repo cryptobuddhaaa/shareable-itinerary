@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Check the wallet row exists and matches the address
     const { data: wallet, error: fetchError } = await supabase
       .from('user_wallets')
-      .select('id, wallet_address, verified_at')
+      .select('id, user_id, wallet_address, verified_at')
       .eq('id', walletId)
       .single();
 
@@ -70,6 +70,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Already verified
     if (wallet.verified_at) {
       return res.status(200).json({ verified: true });
+    }
+
+    // UNIQUENESS CHECK: Ensure this wallet address isn't verified by another user
+    const { data: existingOwner } = await supabase
+      .from('user_wallets')
+      .select('user_id')
+      .eq('wallet_address', walletAddress)
+      .not('verified_at', 'is', null)
+      .neq('user_id', wallet.user_id)
+      .limit(1);
+
+    if (existingOwner && existingOwner.length > 0) {
+      return res.status(409).json({
+        error: 'This wallet is already verified by another account',
+        verified: false,
+      });
+    }
+
+    // UNIQUENESS CHECK: Ensure this user doesn't already have a different verified wallet
+    const { data: existingWallet } = await supabase
+      .from('user_wallets')
+      .select('id, wallet_address')
+      .eq('user_id', wallet.user_id)
+      .not('verified_at', 'is', null)
+      .neq('id', walletId)
+      .limit(1);
+
+    if (existingWallet && existingWallet.length > 0) {
+      return res.status(409).json({
+        error: 'You already have a verified wallet. Unlink it first to verify a different one.',
+        verified: false,
+      });
     }
 
     // Update verified_at

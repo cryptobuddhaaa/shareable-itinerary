@@ -283,6 +283,38 @@ async function handleStart(
     return;
   }
 
+  // UNIQUENESS CHECK: Ensure this Telegram account isn't linked to a different user
+  const { data: existingLink } = await supabase
+    .from('telegram_links')
+    .select('user_id')
+    .eq('telegram_user_id', telegramUserId)
+    .single();
+
+  if (existingLink && existingLink.user_id !== linkCode.user_id) {
+    await sendMessage(
+      chatId,
+      '❌ This Telegram account is already linked to a different account.\n\n' +
+        'You must unlink it from the other account first (web app → Contacts → Unlink Telegram).'
+    );
+    return;
+  }
+
+  // UNIQUENESS CHECK: Ensure the target user doesn't already have a different Telegram linked
+  const { data: existingUserLink } = await supabase
+    .from('telegram_links')
+    .select('telegram_user_id')
+    .eq('user_id', linkCode.user_id)
+    .single();
+
+  if (existingUserLink && existingUserLink.telegram_user_id !== telegramUserId) {
+    await sendMessage(
+      chatId,
+      '❌ That web account already has a different Telegram account linked.\n\n' +
+        'Unlink the existing Telegram first (web app → Contacts → Unlink Telegram), then try again.'
+    );
+    return;
+  }
+
   // Upsert the link (handles both new links and re-links)
   await supabase.from('telegram_links').upsert({
     telegram_user_id: telegramUserId,

@@ -65,9 +65,15 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
 
   linkWallet: async (userId: string, walletAddress: string) => {
     try {
-      // Check if wallet already linked
+      // Check if wallet already linked to this account
       const existing = get().wallets.find((w) => w.walletAddress === walletAddress);
       if (existing) return existing;
+
+      // Block if user already has a verified wallet (one verified wallet per account)
+      const verifiedWallet = get().wallets.find((w) => w.verifiedAt);
+      if (verifiedWallet) {
+        throw new Error('You already have a verified wallet. Unlink it first to connect a different one.');
+      }
 
       const isPrimary = get().wallets.length === 0;
 
@@ -103,7 +109,10 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
         body: JSON.stringify({ walletId, signature, message, walletAddress }),
       });
 
-      if (!response.ok) return false;
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Wallet verification failed');
+      }
 
       const { verified } = await response.json();
       if (verified) {

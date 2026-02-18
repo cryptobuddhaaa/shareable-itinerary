@@ -29,9 +29,20 @@ export function WalletButton() {
     if (existing?.verifiedAt) return;
 
     // Link wallet to DB if not already
-    const linked = existing || await linkWallet(user.id, walletAddress);
+    let linked = existing;
+    if (!linked) {
+      try {
+        linked = await linkWallet(user.id, walletAddress);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Failed to link wallet';
+        toast.error(msg);
+        disconnect();
+        return;
+      }
+    }
     if (!linked) {
       toast.error('Failed to link wallet. Please try again.');
+      disconnect();
       return;
     }
 
@@ -49,15 +60,19 @@ export function WalletButton() {
           toast.success('Wallet verified and linked!');
         } else {
           toast.error('Wallet verification failed. Please try again.');
+          disconnect();
         }
       } catch (error) {
-        // User rejected the signature request
-        if ((error as Error)?.message?.includes('rejected')) {
+        const msg = (error as Error)?.message || '';
+        if (msg.includes('rejected')) {
           toast.info('Wallet verification cancelled.');
+        } else if (msg.includes('already')) {
+          toast.error(msg);
         } else {
           console.error('Wallet verification error:', error);
-          toast.error('Failed to verify wallet.');
+          toast.error(msg || 'Failed to verify wallet.');
         }
+        disconnect();
       } finally {
         setVerifying(false);
       }
