@@ -78,7 +78,7 @@ export function WalletButton() {
         setVerifying(false);
       }
     }
-  }, [user, walletAddress, signMessage, wallets, linkWallet, verifyWallet]);
+  }, [user, walletAddress, signMessage, wallets, linkWallet, verifyWallet, disconnect]);
 
   // Auto-trigger link when wallet connects
   useEffect(() => {

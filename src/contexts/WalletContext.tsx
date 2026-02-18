@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { WalletError, WalletConnectionError } from '@solana/wallet-adapter-base';
 import { clusterApiUrl } from '@solana/web3.js';
 
 // Register Mobile Wallet Adapter for Android MWA support (only on Android devices)
@@ -42,9 +43,20 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   // MWA registered via registerMwa() on Android
   const wallets = useMemo(() => [], []);
 
+  const onError = useCallback((error: WalletError) => {
+    // Silently ignore autoConnect / silent-connect failures — the wallet adapter
+    // retries on the next user-initiated connect anyway.
+    if (error instanceof WalletConnectionError) {
+      console.warn('[Wallet] Connection attempt failed:', error.message);
+      return;
+    }
+    // Surface all other wallet errors normally
+    console.error('[Wallet]', error.name, error.message);
+  }, []);
+
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect onError={onError}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>
