@@ -1,12 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
-import { useItinerary, generateEventId } from '../hooks/useItinerary';
+import { useItinerary } from '../hooks/useItinerary';
 import { useContacts } from '../hooks/useContacts';
-import { useAuth } from '../hooks/useAuth';
 import EventForm from './EventForm';
 import EditEventDialog from './EditEventDialog';
 import ContactForm from './ContactForm';
 import ContactsList from './ContactsList';
-import { AIAssistantModal } from './AIAssistant/AIAssistantModal';
 import GoogleCalendarImport from './GoogleCalendarImport';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 import { mapsService } from '../services/mapsService';
@@ -21,15 +19,13 @@ interface ItineraryTimelineProps {
 
 export default function ItineraryTimeline({ sharedItinerary, readOnly = false }: ItineraryTimelineProps = {}) {
   const { currentItinerary, deleteEvent, clearItinerary, addEvent } = useItinerary();
-  const { getContactsByEvent, deleteContactsByEvent, getContactsByItinerary } = useContacts();
-  const { user } = useAuth();
+  const { getContactsByEvent, deleteContactsByEvent } = useContacts();
   const [selectedDay, setSelectedDay] = useState<ItineraryDay | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [addingContactFor, setAddingContactFor] = useState<{ event: ItineraryEvent; dayDate: string } | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [contactsExpanded, setContactsExpanded] = useState(true);
-  const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [eventSearch, setEventSearch] = useState('');
   const { confirm, dialogProps } = useConfirmDialog();
   const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -188,47 +184,6 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
     }
   };
 
-  const handleAIEventCreate = async (event: Partial<ItineraryEvent>) => {
-    try {
-      if (!event.startTime || !event.endTime) {
-        toast.error('Event is missing required time information. Please try again.');
-        return;
-      }
-
-      const startDate = new Date(event.startTime);
-      if (isNaN(startDate.getTime())) {
-        toast.error('Event has an invalid date/time. Please try again.');
-        return;
-      }
-
-      const eventDate = startDate.toISOString().split('T')[0];
-      const day = itinerary.days.find((d) => d.date === eventDate);
-
-      if (!day) {
-        toast.error(`Could not find the day ${eventDate} in your itinerary. Please try adding it manually.`);
-        return;
-      }
-
-      // Ensure the event has an id and notes array
-      const fullEvent: ItineraryEvent = {
-        id: generateEventId(),
-        title: event.title || 'Untitled Event',
-        startTime: event.startTime,
-        endTime: event.endTime,
-        eventType: event.eventType || 'activity',
-        location: event.location || { name: '', address: '' },
-        description: event.description,
-        notes: event.notes || [],
-        ...event,
-      };
-
-      await addEvent(day.date, fullEvent);
-    } catch (error) {
-      console.error('Error creating AI event:', error);
-      toast.error('Failed to create event. Please try again.');
-    }
-  };
-
   return (
     <div>
       <div className="bg-slate-800 shadow rounded-lg p-6 mb-6">
@@ -245,21 +200,10 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           </div>
           <div className="flex gap-2 flex-wrap">
             {!readOnly && (
-              <>
-                <button
-                  onClick={() => setShowAIAssistant(true)}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-purple-500"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  AI Assistant
-                </button>
-                <GoogleCalendarImport
-                  itinerary={itinerary}
-                  onEventsImport={handleGoogleCalendarImport}
-                />
-              </>
+              <GoogleCalendarImport
+                itinerary={itinerary}
+                onEventsImport={handleGoogleCalendarImport}
+              />
             )}
             <button
               onClick={() => printItinerary(itinerary)}
@@ -607,28 +551,6 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
           lumaEventUrl={addingContactFor.event.lumaEventUrl}
           dateMet={addingContactFor.dayDate}
           onClose={() => setAddingContactFor(null)}
-        />
-      )}
-
-      {showAIAssistant && user && (
-        <AIAssistantModal
-          isOpen={showAIAssistant}
-          onClose={() => setShowAIAssistant(false)}
-          itinerary={itinerary}
-          currentDate={new Date().toISOString().split('T')[0]} // Pass today's date
-          existingEvents={itinerary.days.flatMap((day) => day.events)}
-          contacts={getContactsByItinerary(itinerary.id)}
-          onEventCreate={handleAIEventCreate}
-          onEventDelete={async (eventId: string) => {
-            const eventContacts = getContactsByEvent(eventId);
-            // Delete associated contacts first
-            if (eventContacts.length > 0) {
-              await deleteContactsByEvent(eventId);
-            }
-            // Then delete the event
-            await deleteEvent(eventId);
-          }}
-          user={user}
         />
       )}
 

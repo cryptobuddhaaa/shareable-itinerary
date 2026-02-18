@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
@@ -13,7 +13,7 @@ function vercelApiPlugin(): Plugin {
     name: 'vercel-api',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith('/api/') || req.url.startsWith('/api/claude')) {
+        if (!req.url?.startsWith('/api/')) {
           return next();
         }
 
@@ -64,36 +64,6 @@ function vercelApiPlugin(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-
-  return {
-    plugins: [react(), vercelApiPlugin()],
-    server: {
-      proxy: {
-        '/api/claude': {
-          target: 'https://api.anthropic.com',
-          changeOrigin: true,
-          secure: true,
-          rewrite: (path) => path.replace(/^\/api\/claude/, '/v1/messages'),
-          configure: (proxy, _options) => {
-            proxy.on('proxyReq', (proxyReq, _req, _res) => {
-              // Add required headers for Claude API
-              proxyReq.setHeader('x-api-key', env.CLAUDE_API_KEY || '');
-              proxyReq.setHeader('anthropic-version', '2023-06-01');
-              proxyReq.setHeader('Content-Type', 'application/json');
-
-              // Remove browser-specific headers that might cause issues
-              proxyReq.removeHeader('origin');
-              proxyReq.removeHeader('referer');
-            });
-
-            proxy.on('error', (err, _req, _res) => {
-              console.error('Proxy error:', err);
-            });
-          },
-        },
-      },
-    },
-  }
+export default defineConfig({
+  plugins: [react(), vercelApiPlugin()],
 })
