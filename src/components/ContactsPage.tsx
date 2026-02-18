@@ -201,14 +201,14 @@ export default function ContactsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex justify-between items-start">
-        <div>
+      <div className="mb-6">
+        <div className="mb-3">
           <h2 className="text-xl font-bold text-white">My Contacts</h2>
           <p className="text-sm text-slate-400 mt-1">
             People you've connected with across all your trips and events
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowAddContact(true)}
             className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500"
