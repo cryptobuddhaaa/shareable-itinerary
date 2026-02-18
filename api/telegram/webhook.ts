@@ -223,7 +223,9 @@ async function handleStart(
         '👋 <b>Welcome back!</b> Your account is linked.\n\n' +
           '📋 <b>Plan your trip</b>\n' +
           '/newitinerary — Create a new trip\n' +
-          '/newevent — Add events (or paste Luma links)\n\n' +
+          '/newevent — Add events (or paste Luma links)\n' +
+          '/itineraries — View trips & events\n' +
+          '/today — Today\'s events at a glance\n\n' +
           '👥 <b>Manage contacts</b>\n' +
           '/newcontact — Add a contact\n' +
           '/contacts — Browse contacts by trip or event\n' +
@@ -927,6 +929,228 @@ async function handleContactConfirmation(
       },
     }
   );
+}
+
+// ============================================================
+// VIEW ITINERARIES & EVENTS (/itineraries, today's events)
+// ============================================================
+
+interface ParsedEvent {
+  title: string;
+  startTime: string;
+  endTime: string;
+  location?: { name?: string; address?: string; mapsUrl?: string };
+  lumaEventUrl?: string;
+  eventType?: string;
+  dayDate: string;
+  itineraryTitle: string;
+}
+
+async function handleItineraries(chatId: number, telegramUserId: number) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked yet.\n\nGo to your web app → Contacts → Link Telegram to get started.');
+    return;
+  }
+
+  const { data: itineraries } = await supabase
+    .from('itineraries')
+    .select('id, title, start_date, end_date, location, data')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false })
+    .limit(10);
+
+  if (!itineraries || itineraries.length === 0) {
+    await sendMessage(chatId, '📅 No itineraries found. Create one with /newitinerary or in the web app.');
+    return;
+  }
+
+  // Show itinerary list with inline buttons
+  const keyboard = itineraries.map((it) => {
+    const start = new Date(it.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const end = new Date(it.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const label = `${start}–${end} · ${it.title}`.substring(0, 60);
+    return [{ text: label, callback_data: `iv:${it.id}` }];
+  });
+  keyboard.push([{ text: '📅 Today\'s Events', callback_data: 'iv:today' }]);
+
+  await sendMessage(chatId, '<b>📅 Your Itineraries</b>\n\nSelect one to see its events, or tap "Today\'s Events" for a quick view.', {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+async function handleItineraryView(
+  chatId: number,
+  telegramUserId: number,
+  action: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  if (action === 'today') {
+    await showTodaysEvents(chatId, userId);
+    return;
+  }
+
+  // action is an itinerary ID
+  const itineraryId = action;
+  const { data: itinerary } = await supabase
+    .from('itineraries')
+    .select('id, title, start_date, end_date, location, data')
+    .eq('id', itineraryId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!itinerary) {
+    await sendMessage(chatId, '❌ Itinerary not found.');
+    return;
+  }
+
+  const itData = itinerary.data as { days?: Array<{ date: string; events?: Array<Record<string, unknown>> }> };
+  const days = itData.days || [];
+  const allEvents: ParsedEvent[] = [];
+
+  for (const day of days) {
+    for (const ev of day.events || []) {
+      allEvents.push({
+        title: ev.title as string || 'Untitled',
+        startTime: ev.startTime as string || '',
+        endTime: ev.endTime as string || '',
+        location: ev.location as ParsedEvent['location'],
+        lumaEventUrl: ev.lumaEventUrl as string | undefined,
+        eventType: ev.eventType as string | undefined,
+        dayDate: day.date,
+        itineraryTitle: itinerary.title,
+      });
+    }
+  }
+
+  if (allEvents.length === 0) {
+    await sendMessage(chatId,
+      `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location}\n${itinerary.start_date} → ${itinerary.end_date}\n\nNo events yet. Add events with /newevent.`
+    );
+    return;
+  }
+
+  const startFmt = new Date(itinerary.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const endFmt = new Date(itinerary.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${allEvents.length} event${allEvents.length !== 1 ? 's' : ''}\n\n`;
+
+  message += formatEventList(allEvents);
+
+  await sendMessage(chatId, message, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+      ],
+    },
+  });
+}
+
+async function showTodaysEvents(chatId: number, userId: string) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayFmt = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const { data: itineraries } = await supabase
+    .from('itineraries')
+    .select('id, title, start_date, end_date, data')
+    .eq('user_id', userId)
+    .lte('start_date', todayStr)
+    .gte('end_date', todayStr);
+
+  const todayEvents: ParsedEvent[] = [];
+
+  if (itineraries) {
+    for (const it of itineraries) {
+      const itData = it.data as { days?: Array<{ date: string; events?: Array<Record<string, unknown>> }> };
+      for (const day of itData.days || []) {
+        if (day.date !== todayStr) continue;
+        for (const ev of day.events || []) {
+          todayEvents.push({
+            title: ev.title as string || 'Untitled',
+            startTime: ev.startTime as string || '',
+            endTime: ev.endTime as string || '',
+            location: ev.location as ParsedEvent['location'],
+            lumaEventUrl: ev.lumaEventUrl as string | undefined,
+            eventType: ev.eventType as string | undefined,
+            dayDate: day.date,
+            itineraryTitle: it.title,
+          });
+        }
+      }
+    }
+  }
+
+  // Sort by start time
+  todayEvents.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+  if (todayEvents.length === 0) {
+    await sendMessage(chatId, `📅 <b>Today — ${todayFmt}</b>\n\nNo events scheduled for today.`);
+    return;
+  }
+
+  let message = `📅 <b>Today — ${todayFmt}</b>\n${todayEvents.length} event${todayEvents.length !== 1 ? 's' : ''}\n\n`;
+  message += formatEventList(todayEvents);
+
+  await sendMessage(chatId, message, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+      ],
+    },
+  });
+}
+
+function formatEventList(events: ParsedEvent[]): string {
+  let message = '';
+  let currentDate = '';
+
+  for (const ev of events) {
+    // Date header (for multi-day itinerary view)
+    if (ev.dayDate !== currentDate) {
+      currentDate = ev.dayDate;
+      const dateFmt = new Date(ev.dayDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      message += `<b>— ${dateFmt} —</b>\n`;
+    }
+
+    // Time range
+    let timeStr = '';
+    if (ev.startTime) {
+      const start = new Date(ev.startTime);
+      const startFmt = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      timeStr = startFmt;
+      if (ev.endTime) {
+        const end = new Date(ev.endTime);
+        const endFmt = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        timeStr += ` – ${endFmt}`;
+      }
+    }
+
+    message += `\n📌 <b>${ev.title}</b>`;
+    if (ev.itineraryTitle && events.some((e) => e.itineraryTitle !== ev.itineraryTitle)) {
+      // Show itinerary name only if events span multiple itineraries (today's view)
+      message += ` <i>(${ev.itineraryTitle})</i>`;
+    }
+    message += '\n';
+    if (timeStr) message += `    🕐 ${timeStr}\n`;
+
+    if (ev.location?.name) {
+      message += `    📍 ${ev.location.name}`;
+      if (ev.location.mapsUrl) {
+        message += ` — <a href="${ev.location.mapsUrl}">Map</a>`;
+      }
+      message += '\n';
+    }
+
+    if (ev.lumaEventUrl) {
+      message += `    🔗 <a href="${ev.lumaEventUrl}">Luma Event</a>\n`;
+    }
+  }
+
+  return message;
 }
 
 // ============================================================
@@ -2772,6 +2996,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handleNewItinerary(chatId, telegramUserId);
       } else if (text === '/newevent') {
         await handleNewEvent(chatId, telegramUserId);
+      } else if (text === '/itineraries' || text === '/events') {
+        await handleItineraries(chatId, telegramUserId);
+      } else if (text === '/today') {
+        const userId = await getLinkedUserId(telegramUserId);
+        if (userId) await showTodaysEvents(chatId, userId);
+        else await sendMessage(chatId, '❌ Your account is not linked yet.');
       } else if (text === '/contacts') {
         await handleContacts(chatId, telegramUserId);
       } else if (text.startsWith('/contacted')) {
@@ -2786,7 +3016,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           '<b>📖 Command Reference</b>\n\n' +
             '📋 <b>Trip Planning</b>\n' +
             '/newitinerary — Create a new trip with dates & location\n' +
-            '/newevent — Add an event to a trip (manual or Luma import)\n\n' +
+            '/newevent — Add an event to a trip (manual or Luma import)\n' +
+            '/itineraries — View your trips and events with Luma & map links\n' +
+            '/today — Quick view of today\'s events across all trips\n\n' +
             '👥 <b>Contact Management</b>\n' +
             '/newcontact — Add a contact linked to a trip/event\n' +
             '/contacts — Browse contacts by trip, event, or all\n' +
@@ -2855,6 +3087,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (data.startsWith('xe:')) {
         const fieldIndex = parseInt(data.substring(3), 10);
         await handleEventEdit(chatId, telegramUserId, fieldIndex, cq.id);
+      }
+      // --- Itinerary view callbacks ---
+      else if (data.startsWith('iv:')) {
+        await handleItineraryView(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Tag selection callbacks ---
       else if (data.startsWith('tg:')) {
