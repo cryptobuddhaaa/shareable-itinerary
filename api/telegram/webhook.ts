@@ -1113,11 +1113,11 @@ async function handleItineraryView(
   let message = `📅 <b>${itinerary.title}</b>\n📍 ${itinerary.location} · ${startFmt} – ${endFmt}\n${totalEvents} event${totalEvents !== 1 ? 's' : ''}\n\nSelect a date to see its events:`;
 
   // Build date buttons — 2 per row
-  const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+  const keyboard: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>> = [];
   const todayStr = new Date().toISOString().split('T')[0];
 
   for (let i = 0; i < days.length; i += 2) {
-    const row: Array<{ text: string; callback_data: string }> = [];
+    const row: Array<{ text: string; callback_data?: string; web_app?: { url: string } }> = [];
     for (let j = i; j < i + 2 && j < days.length; j++) {
       const d = days[j];
       const eventCount = d.events?.length || 0;
