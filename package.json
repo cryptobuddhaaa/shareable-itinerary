@@ -10,12 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@solana-mobile/wallet-standard-mobile": "^0.4.4",
     "@solana/wallet-adapter-base": "^0.9.27",
-    "@solana/wallet-adapter-phantom": "^0.9.28",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",
-    "@solana/wallet-adapter-solflare": "^0.6.32",
     "@solana/web3.js": "^1.98.4",
+    "@solflare-wallet/wallet-adapter": "^1.0.4",
     "@supabase/supabase-js": "^2.94.0",
     "bs58": "^6.0.0",
     "dompurify": "^3.3.1",
