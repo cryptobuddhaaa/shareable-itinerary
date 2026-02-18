@@ -300,11 +300,16 @@ async function handleStart(
     chatId,
     '✅ <b>Account linked successfully!</b>\n\n' +
       'You\'re all set. Here\'s what you can do:\n\n' +
+      '📋 <b>Trip Planning</b>\n' +
       '/newitinerary — Create a trip\n' +
       '/newevent — Add events (or paste Luma links)\n' +
+      '/itineraries — View trips & events\n' +
+      '/today — Today\'s events at a glance\n\n' +
+      '👥 <b>Contacts</b>\n' +
       '/newcontact — Add a contact\n' +
-      '/contacts — Browse contacts by trip or event\n\n' +
-      '💡 Forward a message from someone → saves them as a contact, or adds a note if they already exist!\n\n' +
+      '/contacts — Browse contacts by trip or event\n' +
+      '/contacted @handle — Log a follow-up\n\n' +
+      '💡 <b>Forward a message</b> from someone → saves them as a contact, or adds a note if they already exist!\n\n' +
       'Use /help for the full command list.'
   );
 }
