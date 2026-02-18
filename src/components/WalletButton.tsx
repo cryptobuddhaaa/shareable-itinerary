@@ -119,7 +119,7 @@ export function WalletButton() {
 
   // Detect Telegram WebApp — wallets can't connect inside Telegram's in-app browser
   const isTelegramWebApp = typeof window !== 'undefined' &&
-    (!!(window as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
+    (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
   if (isTelegramWebApp && !primaryWallet) {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 border border-slate-600 rounded-md">
