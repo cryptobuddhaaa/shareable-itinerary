@@ -151,14 +151,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (createError) {
         // User already exists (e.g. previously unlinked) — look them up by email
-        const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
+        // Paginate through users in small batches instead of loading all into memory
+        let existingUser = null;
+        let page = 1;
+        const perPage = 50;
 
-        if (listError) {
-          console.error('Error listing users:', listError);
-          return res.status(500).json({ error: 'Failed to create or find user account' });
+        while (!existingUser) {
+          const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
+            page,
+            perPage,
+          });
+
+          if (listError) {
+            console.error('Error listing users:', listError);
+            return res.status(500).json({ error: 'Failed to create or find user account' });
+          }
+
+          const users = listData?.users || [];
+          existingUser = users.find((u: { email?: string }) => u.email === syntheticEmail);
+
+          if (existingUser || users.length < perPage) break;
+          page++;
         }
-
-        const existingUser = listData?.users?.find((u: { email?: string }) => u.email === syntheticEmail);
 
         if (!existingUser) {
           console.error('Error finding existing user: User not found');

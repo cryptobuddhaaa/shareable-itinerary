@@ -3055,9 +3055,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Verify webhook secret
+  // Verify webhook secret (constant-time comparison to prevent timing attacks)
   const secretHeader = req.headers['x-telegram-bot-api-secret-token'];
-  if (secretHeader !== WEBHOOK_SECRET) {
+  if (
+    typeof secretHeader !== 'string' ||
+    secretHeader.length !== WEBHOOK_SECRET.length ||
+    !crypto.timingSafeEqual(Buffer.from(secretHeader), Buffer.from(WEBHOOK_SECRET))
+  ) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

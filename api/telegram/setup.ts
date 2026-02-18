@@ -4,6 +4,8 @@
  *
  * Call this once after deployment to register the webhook URL with Telegram.
  * The webhook secret is derived from the bot token so it stays in sync.
+ *
+ * Requires Authorization: Bearer <BOT_TOKEN> to prevent unauthorized access.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -19,16 +21,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not configured' });
   }
 
+  // Authenticate: caller must provide the bot token as Bearer token
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const providedToken = authHeader.substring('Bearer '.length);
+  if (
+    providedToken.length !== botToken.length ||
+    !crypto.timingSafeEqual(Buffer.from(providedToken), Buffer.from(botToken))
+  ) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
   const webhookSecret = crypto
     .createHash('sha256')
     .update(botToken + ':webhook')
     .digest('hex')
     .substring(0, 32);
 
-  // Determine the webhook URL from the request host
-  const host = req.headers.host;
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
-  const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
+  // Build webhook URL from Vercel's trusted headers
+  const host = req.headers['x-vercel-deployment-url'] || req.headers.host;
+  const webhookUrl = `https://${host}/api/telegram/webhook`;
 
   const response = await fetch(
     `https://api.telegram.org/bot${botToken}/setWebhook`,

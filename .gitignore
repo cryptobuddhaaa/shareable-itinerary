@@ -27,5 +27,12 @@ dist-ssr
 .env
 .env.local
 .env.*.local
-.vercel
 .env*.local
+*.env
+.vercel
+
+# Secrets and credentials
+*.pem
+*.key
+credentials.json
+service-account*.json

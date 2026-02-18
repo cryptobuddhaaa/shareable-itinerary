@@ -5,18 +5,10 @@
 
 import type { ItineraryEvent } from '../models/types';
 
-export interface LumaEventsDebugInfo {
+export interface LumaEventsMetaInfo {
   calendarsQueried: number;
-  calendarSources: string[];
   totalCalendarEvents: number;
   lumaEventsFound: number;
-  nonMatchingEvents?: Array<{
-    summary: string;
-    organizer: string;
-    hasDescription: boolean;
-    descriptionSnippet: string | null;
-    attendeeEmails: string[];
-  }>;
 }
 
 export interface GoogleCalendarEvent {
@@ -101,7 +93,7 @@ class GoogleCalendarService {
     accessToken: string,
     timeMin?: string,
     timeMax?: string
-  ): Promise<{ events: GoogleCalendarEvent[]; debug?: LumaEventsDebugInfo }> {
+  ): Promise<{ events: GoogleCalendarEvent[]; meta?: LumaEventsMetaInfo }> {
     const response = await fetch('/api/google-calendar/luma-events', {
       method: 'POST',
       headers: {
@@ -122,7 +114,7 @@ class GoogleCalendarService {
     const data = await response.json();
     return {
       events: data.events || [],
-      debug: data.debug,
+      meta: data.meta,
     };
   }
 

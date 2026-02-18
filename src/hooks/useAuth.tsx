@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session: existingSession } } = await supabase.auth.getSession();
 
       if (existingSession) {
-        console.log('[Auth] Existing session found');
+
         if (!cancelled) {
           setSession(existingSession);
           setUser(existingSession.user);
@@ -66,12 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // No existing session — check if we're in a Telegram Mini App
       const initData = getTelegramInitData();
-      console.log('[Auth] Telegram initData:', initData ? `present (${initData.length} chars)` : 'not available');
+
 
       if (initData) {
         telegramAuthInProgress.current = true;
         try {
-          console.log('[Auth] Calling /api/auth/telegram...');
+
           const response = await fetch('/api/auth/telegram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           const { token_hash } = await response.json();
-          console.log('[Auth] Got token_hash, verifying OTP...');
+
 
           // Verify the OTP token to establish a real Supabase session
           const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('[Auth] OTP verification failed:', otpError);
             toast.error('Failed to establish session');
           } else {
-            console.log('[Auth] OTP verification succeeded, user:', otpData?.user?.id);
+
             // Set session directly from verifyOtp response
             if (!cancelled && otpData?.session) {
               setSession(otpData.session);
@@ -168,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     telegramAuthInProgress.current = true;
 
     try {
-      console.log('[Auth] Manual Telegram sign-in, calling /api/auth/telegram...');
+
       const response = await fetch('/api/auth/telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -185,7 +185,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const { token_hash } = await response.json();
-      console.log('[Auth] Got token_hash, verifying OTP...');
 
       const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
         token_hash,
@@ -198,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('[Auth] OTP verification failed:', otpError);
         toast.error('Failed to establish session');
       } else {
-        console.log('[Auth] Telegram sign-in succeeded, user:', otpData?.user?.id);
+
         if (otpData?.session) {
           setSession(otpData.session);
           setUser(otpData.session.user);

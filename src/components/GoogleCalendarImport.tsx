@@ -75,22 +75,11 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       timeMax.setHours(23, 59, 59, 999);
       const timeMaxISO = timeMax.toISOString();
 
-      const { events, debug } = await googleCalendarService.fetchLumaEvents(
+      const { events, meta } = await googleCalendarService.fetchLumaEvents(
         accessToken,
         timeMin,
         timeMaxISO
       );
-
-      // Log debug info to help diagnose detection issues
-      if (debug) {
-        console.log('Luma import debug:', {
-          calendarsQueried: debug.calendarsQueried,
-          calendarSources: debug.calendarSources,
-          totalCalendarEvents: debug.totalCalendarEvents,
-          lumaEventsFound: debug.lumaEventsFound,
-          nonMatchingEvents: debug.nonMatchingEvents,
-        });
-      }
 
       setLumaEvents(events);
 
@@ -102,19 +91,9 @@ export default function GoogleCalendarImport({ itinerary, onEventsImport }: Goog
       } else {
         let errorMsg = `No Luma events found in your calendar between ${new Date(itinerary.startDate).toLocaleDateString()} and ${new Date(itinerary.endDate).toLocaleDateString()}.`;
 
-        if (debug && debug.totalCalendarEvents > 0) {
-          errorMsg += `\n\nFound ${debug.totalCalendarEvents} calendar event(s) in this range, but none matched Luma filters (organizer @lu.ma, attendee @lu.ma, or lu.ma/luma.com link in description).`;
-
-          if (debug.nonMatchingEvents && debug.nonMatchingEvents.length > 0) {
-            errorMsg += '\n\nNon-matching events:';
-            for (const sample of debug.nonMatchingEvents) {
-              errorMsg += `\n• "${sample.summary}" — organizer: ${sample.organizer}, description: ${sample.hasDescription ? 'yes' : 'none'}`;
-              if (sample.descriptionSnippet) {
-                errorMsg += `\n  Snippet: ${sample.descriptionSnippet.substring(0, 200)}`;
-              }
-            }
-          }
-        } else if (debug && debug.totalCalendarEvents === 0) {
+        if (meta && meta.totalCalendarEvents > 0) {
+          errorMsg += `\n\nFound ${meta.totalCalendarEvents} calendar event(s) in this range, but none matched Luma filters (organizer @lu.ma, attendee @lu.ma, or lu.ma/luma.com link in description).`;
+        } else if (meta && meta.totalCalendarEvents === 0) {
           errorMsg += '\n\nNo calendar events at all were found in this date range.';
         }
 

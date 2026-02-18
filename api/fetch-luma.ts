@@ -64,8 +64,7 @@ export default async function handler(
   } catch (error) {
     console.error('Error fetching Luma event:', error);
     return res.status(500).json({
-      error: 'Failed to fetch event data',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Failed to fetch event data'
     });
   }
 }
