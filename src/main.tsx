@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './hooks/useAuth.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { SolanaWalletProvider } from './contexts/WalletContext.tsx'
 
 // Signal to Telegram that the Mini App is ready
 try {
@@ -16,9 +17,11 @@ try {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <SolanaWalletProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </SolanaWalletProvider>
     </ErrorBoundary>
   </StrictMode>,
 )

@@ -12,6 +12,8 @@ import ContactsPage from './components/ContactsPage';
 import type { Itinerary } from './models/types';
 import { Toaster } from './components/Toast';
 import { ConfirmDialog, useConfirmDialog } from './components/ConfirmDialog';
+import { WalletButton } from './components/WalletButton';
+import { useUserWallet } from './hooks/useUserWallet';
 
 type ActiveTab = 'itinerary' | 'contacts' | 'shared';
 
@@ -19,6 +21,7 @@ function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { currentItinerary, itineraries, initialize, initialized, reset } = useItinerary();
   const { initialize: initializeContacts, initialized: contactsInitialized, reset: resetContacts } = useContacts();
+  const { initialize: initializeWallets, initialized: walletsInitialized, reset: resetWallets } = useUserWallet();
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
@@ -90,7 +93,13 @@ function App() {
     } else if (!user && contactsInitialized) {
       resetContacts();
     }
-  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts]);
+
+    if (user && !walletsInitialized) {
+      initializeWallets(user.id);
+    } else if (!user && walletsInitialized) {
+      resetWallets();
+    }
+  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts, walletsInitialized, initializeWallets, resetWallets]);
 
   // This effect is removed - we handle shared itineraries separately now
 
@@ -284,6 +293,7 @@ function App() {
               </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">
+              <WalletButton />
               {itinerary && (
                 <button
                   onClick={() => setShowShareDialog(true)}

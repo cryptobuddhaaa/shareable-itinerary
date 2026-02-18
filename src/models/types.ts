@@ -109,3 +109,52 @@ export interface ContactNote {
   content: string;
   createdAt: string;
 }
+
+// Web3 types
+
+export interface UserWallet {
+  id: string;
+  userId: string;
+  walletAddress: string;
+  isPrimary: boolean;
+  verifiedAt: string | null;
+  createdAt: string;
+}
+
+export type HandshakeStatus = 'pending' | 'matched' | 'minted' | 'expired';
+
+export interface Handshake {
+  id: string;
+  initiatorUserId: string;
+  receiverUserId: string | null;
+  receiverIdentifier: string;
+  contactId: string | null;
+  eventId: string | null;
+  eventTitle: string | null;
+  eventDate: string | null;
+  initiatorWallet: string | null;
+  receiverWallet: string | null;
+  initiatorMintedAt: string | null;
+  receiverMintedAt: string | null;
+  status: HandshakeStatus;
+  initiatorNftAddress: string | null;
+  receiverNftAddress: string | null;
+  initiatorTxSignature: string | null;
+  receiverTxSignature: string | null;
+  pointsAwarded: number;
+  mintFeeLamports: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface TrustScore {
+  userId: string;
+  telegramPremium: boolean;
+  hasProfilePhoto: boolean;
+  hasUsername: boolean;
+  telegramAccountAgeDays: number | null;
+  walletConnected: boolean;
+  totalHandshakes: number;
+  trustLevel: number;
+  updatedAt: string;
+}
