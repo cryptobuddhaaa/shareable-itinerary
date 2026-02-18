@@ -27,8 +27,7 @@ export const CreateItinerarySchema = z.object({
     .max(200, 'Title must be less than 200 characters')
     .transform(sanitizeText),
   startDate: z.string()
-    .refine((date) => !isNaN(Date.parse(date)), 'Invalid start date')
-    .refine((date) => new Date(date) >= new Date(new Date().setHours(0, 0, 0, 0)), 'Start date cannot be in the past'),
+    .refine((date) => !isNaN(Date.parse(date)), 'Invalid start date'),
   endDate: z.string()
     .refine((date) => !isNaN(Date.parse(date)), 'Invalid end date'),
   location: z.string()
