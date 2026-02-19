@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS handshakes (
   initiator_minted_at TIMESTAMPTZ,
   receiver_minted_at TIMESTAMPTZ,
   status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'matched', 'minted', 'expired')),
+    CHECK (status IN ('pending', 'claimed', 'matched', 'minted', 'expired')),
   initiator_nft_address TEXT, -- cNFT asset ID on Solana
   receiver_nft_address TEXT,
   initiator_tx_signature TEXT, -- Solana transaction signature
