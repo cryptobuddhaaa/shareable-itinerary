@@ -10,6 +10,7 @@ import { Transaction } from '@solana/web3.js';
 import { useHandshakes } from '../hooks/useHandshakes';
 import { useUserWallet } from '../hooks/useUserWallet';
 import { toast } from './Toast';
+import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 import type { Contact, Handshake } from '../models/types';
 
 interface HandshakeButtonProps {
@@ -22,6 +23,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const { getPrimaryWallet } = useUserWallet();
   const { initiate, confirmTx, getByContactId, getByIdentifier, getByInitiatorName } = useHandshakes();
   const [loading, setLoading] = useState(false);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const contactFullName = `${contact.firstName} ${contact.lastName}`;
   const existingHandshake = getByContactId(contact.id)
@@ -48,7 +50,13 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     }
   };
 
-  if (existingHandshake) {
+  // Check if this is a stuck pending handshake (user cancelled wallet signing)
+  const isStuckPending = existingHandshake
+    && existingHandshake.status === 'pending'
+    && existingHandshake.initiatorUserId === userId
+    && !existingHandshake.initiatorTxSignature;
+
+  if (existingHandshake && !isStuckPending) {
     const info = getStatusInfo(existingHandshake);
     const nftSig = existingHandshake.status === 'minted'
       ? (existingHandshake.initiatorUserId === userId
@@ -99,6 +107,18 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
       return;
     }
 
+    // Show confirmation dialog (skip for retry — user already confirmed before)
+    if (!isStuckPending) {
+      const confirmed = await confirm({
+        title: 'Send Proof of Handshake?',
+        message: `This will send a handshake request to ${contact.firstName} ${contact.lastName}. You'll pay 0.01 SOL to confirm your connection. When they accept and pay 0.01 SOL, you'll both receive a soulbound NFT as proof and earn 10 points.`,
+        confirmLabel: 'Send Handshake',
+        variant: 'default',
+      });
+
+      if (!confirmed) return;
+    }
+
     setLoading(true);
     try {
       const result = await initiate(userId, contact.id, wallet.walletAddress);
@@ -131,7 +151,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
       if (message.includes('already exists')) {
         toast.info('A handshake already exists with this person');
       } else if (message.includes('User rejected')) {
-        toast.info('Transaction cancelled');
+        toast.info('Transaction cancelled. Click "Retry" to try again.');
       } else {
         toast.error(message || 'Failed to initiate handshake');
       }
@@ -141,29 +161,32 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   };
 
   return (
-    <button
-      onClick={handleInitiate}
-      disabled={loading || !wallet}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border transition-colors ${
-        wallet
-          ? 'bg-purple-900/30 border-purple-700/50 text-purple-300 hover:bg-purple-900/50 hover:text-purple-200'
-          : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-      }`}
-      title={wallet ? `Send handshake to ${contact.firstName} (0.01 SOL)` : 'Connect wallet first'}
-      aria-label={`Send handshake to ${contact.firstName} ${contact.lastName}`}
-    >
-      {loading ? (
-        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
-      ) : (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0 0v2.5m0-2.5h2.5M7 14H4.5m11-3.5V14m0 0v2.5m0-2.5h2.5M15.5 14H13" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
-        </svg>
-      )}
-      <span>{loading ? 'Signing...' : 'Handshake'}</span>
-    </button>
+    <>
+      <button
+        onClick={handleInitiate}
+        disabled={loading || !wallet}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border transition-colors ${
+          wallet
+            ? 'bg-purple-900/30 border-purple-700/50 text-purple-300 hover:bg-purple-900/50 hover:text-purple-200'
+            : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+        }`}
+        title={wallet ? `Send handshake to ${contact.firstName} (0.01 SOL)` : 'Connect wallet first'}
+        aria-label={`Send handshake to ${contact.firstName} ${contact.lastName}`}
+      >
+        {loading ? (
+          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        ) : (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0 0v2.5m0-2.5h2.5M7 14H4.5m11-3.5V14m0 0v2.5m0-2.5h2.5M15.5 14H13" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
+          </svg>
+        )}
+        <span>{loading ? 'Signing...' : isStuckPending ? 'Retry' : 'Handshake'}</span>
+      </button>
+      <ConfirmDialog {...dialogProps} />
+    </>
   );
 }

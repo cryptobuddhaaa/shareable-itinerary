@@ -60,13 +60,41 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
 
     const { data: existing } = await supabase
       .from('handshakes')
-      .select('id, status')
+      .select('id, status, initiator_tx_signature')
       .eq('initiator_user_id', userId)
       .eq('contact_id', contactId)
       .in('status', ['pending', 'claimed', 'matched', 'minted'])
       .single();
 
     if (existing) {
+      // If pending with no tx signature (user cancelled wallet signing), allow retry
+      if (existing.status === 'pending' && !existing.initiator_tx_signature) {
+        // Rebuild the transaction for this existing handshake
+        const connection = new Connection(SOLANA_RPC, 'confirmed');
+        const payerKey = new PublicKey(walletAddress);
+        const treasuryKey = new PublicKey(TREASURY_WALLET!);
+
+        const transaction = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: payerKey,
+            toPubkey: treasuryKey,
+            lamports: MINT_FEE_LAMPORTS,
+          })
+        );
+        transaction.feePayer = payerKey;
+        transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+        const serialized = transaction.serialize({ requireAllSignatures: false });
+        const base64Tx = Buffer.from(serialized).toString('base64');
+
+        return res.status(200).json({
+          handshakeId: existing.id,
+          transaction: base64Tx,
+          receiverIdentifier,
+          contactName: `${contact.first_name} ${contact.last_name}`.trim(),
+        });
+      }
+
       return res.status(409).json({
         error: 'Handshake already exists for this contact',
         handshakeId: existing.id,
