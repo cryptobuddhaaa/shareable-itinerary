@@ -218,7 +218,9 @@ function App() {
         onDone={() => {
           setClaimHandshakeId(null);
           window.history.replaceState({}, '', window.location.pathname);
-        }}
+          // Re-fetch handshakes so Dashboard shows the updated state
+          if (user) initializeHandshakes(user.id);
+        }}}
       />
     );
   }

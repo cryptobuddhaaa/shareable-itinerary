@@ -33,6 +33,8 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     switch (hs.status) {
       case 'pending':
         return { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-900/30 border-yellow-700/50' };
+      case 'claimed':
+        return { label: 'Claimed', color: 'text-orange-400', bgColor: 'bg-orange-900/30 border-orange-700/50' };
       case 'matched':
         return { label: 'Matched', color: 'text-blue-400', bgColor: 'bg-blue-900/30 border-blue-700/50' };
       case 'minted':
