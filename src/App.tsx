@@ -370,15 +370,6 @@ function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 pb-20 sm:pb-8 sm:px-6 lg:px-8">
-        {itineraries.length === 0 ? (
-          <div className="max-w-2xl mx-auto">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">Create Your First Trip</h2>
-              <p className="text-slate-400">Plan your trip with events and activities, and connect with people you meet</p>
-            </div>
-            <ItineraryForm />
-          </div>
-        ) : (
           <div>
             <div className="mb-6 -mx-4 sm:mx-0 hidden sm:block">
               <nav className="flex space-x-4 border-b border-slate-700 overflow-x-auto scrollbar-hide">
@@ -433,9 +424,19 @@ function App() {
 
             {activeTab === 'itinerary' && (
               <>
-                <ItineraryList />
+                {itineraries.length === 0 ? (
+                  <div className="max-w-2xl mx-auto">
+                    <div className="text-center mb-8">
+                      <h2 className="text-2xl font-bold text-white mb-2">Create Your First Trip</h2>
+                      <p className="text-slate-400">Plan your trip with events and activities, and connect with people you meet</p>
+                    </div>
+                    <ItineraryForm />
+                  </div>
+                ) : (
+                  <ItineraryList />
+                )}
 
-                {showCreateForm && (
+                {itineraries.length > 0 && showCreateForm && (
               <div className="bg-slate-800 shadow rounded-lg p-6 mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold text-white">Create New Itinerary</h2>
@@ -453,7 +454,7 @@ function App() {
               </div>
             )}
 
-                {!showCreateForm && (
+                {itineraries.length > 0 && !showCreateForm && (
                   <button
                     onClick={() => setShowCreateForm(true)}
                     className="w-full mb-6 inline-flex items-center justify-center px-4 py-3 border-2 border-dashed border-slate-600 text-sm font-medium rounded-lg text-slate-300 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500"
@@ -581,11 +582,9 @@ function App() {
 
             {activeTab === 'dashboard' && <Dashboard />}
           </div>
-        )}
       </main>
 
       {/* Mobile bottom navigation */}
-      {itineraries.length > 0 && (
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-40">
           <div className="flex justify-around">
             <button
@@ -639,7 +638,6 @@ function App() {
             </button>
           </div>
         </nav>
-      )}
 
       {showShareDialog && itinerary && (
         <ShareDialog
