@@ -420,9 +420,32 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
 
     const eventInfo = handshake.event_title || 'Meeting';
     const eventDate = handshake.event_date || new Date().toISOString().split('T')[0];
-    const metadataUri = `https://arweave.net/placeholder-${handshakeId}`;
+
+    // Build off-chain metadata JSON (Metaplex Token Metadata standard).
+    // For devnet, we use a data URI. For mainnet, upload to Arweave/Irys.
+    function buildMetadataUri(recipientWallet: string) {
+      const metadata = {
+        name: `Handshake: ${eventInfo}`,
+        symbol: 'SHAKE',
+        description: `Proof of Handshake at "${eventInfo}" on ${eventDate}. Both parties verified this connection on-chain.`,
+        image: '', // TODO: add handshake image for mainnet
+        attributes: [
+          { trait_type: 'Event', value: eventInfo },
+          { trait_type: 'Date', value: eventDate },
+          { trait_type: 'Initiator', value: handshake.initiator_wallet },
+          { trait_type: 'Receiver', value: recipientWallet },
+          { trait_type: 'Handshake ID', value: handshakeId },
+        ],
+        properties: {
+          category: 'image',
+          creators: [],
+        },
+      };
+      return `data:application/json;base64,${Buffer.from(JSON.stringify(metadata)).toString('base64')}`;
+    }
 
     async function mintCNFT(recipient: string) {
+      const metadataUri = buildMetadataUri(recipient);
       const { signature } = await mintV1(umi, {
         leafOwner: publicKey(recipient),
         merkleTree: publicKey(MERKLE_TREE_ADDRESS),
