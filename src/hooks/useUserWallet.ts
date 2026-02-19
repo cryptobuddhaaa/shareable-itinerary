@@ -17,6 +17,7 @@ interface UserWalletState {
   linkWallet: (userId: string, walletAddress: string) => Promise<UserWallet | null>;
   verifyWallet: (walletId: string, signature: string, message: string, walletAddress: string) => Promise<boolean>;
   unlinkWallet: (walletId: string) => Promise<void>;
+  unlinkAllWallets: (userId: string) => Promise<void>;
   getPrimaryWallet: () => UserWallet | null;
   reset: () => void;
 }
@@ -65,25 +66,44 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
 
   linkWallet: async (userId: string, walletAddress: string) => {
     try {
-      // Check if wallet already linked to this account
+      // Check if wallet already linked to this account (in store)
       const existing = get().wallets.find((w) => w.walletAddress === walletAddress);
       if (existing) return existing;
 
-      // Block if user already has a verified wallet (one verified wallet per account)
+      // Block if user already has a DIFFERENT verified wallet
       const verifiedWallet = get().wallets.find((w) => w.verifiedAt);
-      if (verifiedWallet) {
+      if (verifiedWallet && verifiedWallet.walletAddress !== walletAddress) {
         throw new Error('You already have a verified wallet. Unlink it first to connect a different one.');
       }
 
-      const isPrimary = get().wallets.length === 0;
+      // Clean up any stale unverified wallet entries (abandoned connection attempts)
+      const unverified = get().wallets.filter((w) => !w.verifiedAt);
+      for (const w of unverified) {
+        await supabase.from('user_wallets').delete().eq('id', w.id);
+      }
+      if (unverified.length > 0) {
+        set({ wallets: get().wallets.filter((w) => w.verifiedAt) });
+      }
 
+      // Clear is_primary on any other orphaned rows to avoid partial unique index conflict
+      await supabase
+        .from('user_wallets')
+        .update({ is_primary: false })
+        .eq('user_id', userId)
+        .neq('wallet_address', walletAddress);
+
+      // Use upsert to handle re-linking a wallet address that has an orphaned DB row
       const { data, error } = await supabase
         .from('user_wallets')
-        .insert({
-          user_id: userId,
-          wallet_address: walletAddress,
-          is_primary: isPrimary,
-        })
+        .upsert(
+          {
+            user_id: userId,
+            wallet_address: walletAddress,
+            is_primary: true,
+            verified_at: null,
+          },
+          { onConflict: 'user_id,wallet_address' }
+        )
         .select()
         .single();
 
@@ -93,7 +113,7 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
       }
 
       const wallet = mapRowToWallet(data);
-      set({ wallets: [...get().wallets, wallet] });
+      set({ wallets: [...get().wallets.filter((w) => w.id !== wallet.id), wallet] });
       return wallet;
     } catch (error) {
       // Re-throw user-facing errors (uniqueness checks)
@@ -148,6 +168,24 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
       set({ wallets: get().wallets.filter((w) => w.id !== walletId) });
     } catch (error) {
       console.error('Failed to unlink wallet:', error);
+    }
+  },
+
+  unlinkAllWallets: async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_wallets')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error unlinking all wallets:', error);
+        return;
+      }
+
+      set({ wallets: [] });
+    } catch (error) {
+      console.error('Failed to unlink all wallets:', error);
     }
   },
 

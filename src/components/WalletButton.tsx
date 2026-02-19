@@ -3,7 +3,7 @@
  * Uses @solana/wallet-adapter for connection and our useUserWallet for DB persistence.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useUserWallet } from '../hooks/useUserWallet';
@@ -15,7 +15,7 @@ import bs58 from 'bs58';
 export function WalletButton() {
   const { user } = useAuth();
   const { publicKey, signMessage, connected, disconnect } = useWallet();
-  const { wallets, linkWallet, verifyWallet, unlinkWallet, getPrimaryWallet } = useUserWallet();
+  const { wallets, linkWallet, verifyWallet, unlinkWallet, unlinkAllWallets, getPrimaryWallet } = useUserWallet();
   const [verifying, setVerifying] = useState(false);
 
   const primaryWallet = getPrimaryWallet();
@@ -61,6 +61,7 @@ export function WalletButton() {
           toast.success('Wallet verified and linked!');
         } else {
           toast.error('Wallet verification failed. Please try again.');
+          await unlinkWallet(linked.id);
           disconnect();
         }
       } catch (error) {
@@ -73,12 +74,14 @@ export function WalletButton() {
           console.error('Wallet verification error:', error);
           toast.error(msg || 'Failed to verify wallet.');
         }
+        // Clean up the unverified wallet entry before disconnecting
+        await unlinkWallet(linked.id);
         disconnect();
       } finally {
         setVerifying(false);
       }
     }
-  }, [user, walletAddress, signMessage, wallets, linkWallet, verifyWallet, disconnect]);
+  }, [user, walletAddress, signMessage, wallets, linkWallet, verifyWallet, unlinkWallet, disconnect]);
 
   // Auto-trigger link when wallet connects
   useEffect(() => {
@@ -87,12 +90,28 @@ export function WalletButton() {
     }
   }, [connected, walletAddress, user, handleLink]);
 
+  // Track whether we initiated the disconnect (via our X button)
+  const weInitiatedDisconnect = useRef(false);
+
   const handleDisconnect = useCallback(async () => {
-    if (primaryWallet) {
-      await unlinkWallet(primaryWallet.id);
-    }
+    if (!user) return;
+    weInitiatedDisconnect.current = true;
+    // Clean up ALL wallet entries for this user (not just primary/verified)
+    await unlinkAllWallets(user.id);
     disconnect();
-  }, [primaryWallet, unlinkWallet, disconnect]);
+  }, [user, unlinkAllWallets, disconnect]);
+
+  // When adapter disconnects externally (Phantom UI, extension, etc.),
+  // clean up our DB state to prevent orphaned rows
+  const prevConnected = useRef(connected);
+  useEffect(() => {
+    if (prevConnected.current && !connected && !weInitiatedDisconnect.current && user) {
+      // Adapter disconnected but not via our button — clean up DB
+      unlinkAllWallets(user.id);
+    }
+    prevConnected.current = connected;
+    weInitiatedDisconnect.current = false;
+  }, [connected, user, unlinkAllWallets]);
 
   // If wallet is connected and verified, show compact display
   if (primaryWallet && connected) {
