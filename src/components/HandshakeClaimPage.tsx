@@ -9,7 +9,9 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Transaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { useAuth } from '../hooks/useAuth';
+import { useHandshakes } from '../hooks/useHandshakes';
 import { useUserWallet } from '../hooks/useUserWallet';
+import { authFetch } from '../lib/authFetch';
 import { toast } from './Toast';
 
 interface ClaimData {
@@ -28,6 +30,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
   const { user } = useAuth();
   const { connected, publicKey, signTransaction, signMessage } = useWallet();
   const { getPrimaryWallet, linkWallet, verifyWallet } = useUserWallet();
+  const { initialize: refreshHandshakes } = useHandshakes();
   const [claimData, setClaimData] = useState<ClaimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
@@ -94,12 +97,10 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
     const claim = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/handshake?action=claim', {
+        const response = await authFetch('/api/handshake?action=claim', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             handshakeId,
-            userId: user.id,
             walletAddress: wallet.walletAddress,
           }),
         });
@@ -132,9 +133,8 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
       const signedTx = await signTransaction(transaction);
 
       const serialized = signedTx.serialize();
-      const response = await fetch('/api/handshake?action=confirm-tx', {
+      const response = await authFetch('/api/handshake?action=confirm-tx', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           handshakeId: claimData.handshakeId,
           signedTransaction: btoa(String.fromCharCode(...serialized)),
@@ -152,9 +152,8 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
       // If both sides have paid, trigger minting
       if (result.bothPaid) {
         try {
-          const mintResponse = await fetch('/api/handshake?action=mint', {
+          const mintResponse = await authFetch('/api/handshake?action=mint', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ handshakeId: claimData.handshakeId }),
           });
 
@@ -171,6 +170,11 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
         }
       } else {
         toast.success('Handshake payment confirmed!');
+      }
+
+      // Refresh the Zustand store so Dashboard/HandshakeButton reflect the update
+      if (user) {
+        refreshHandshakes(user.id).catch(() => {});
       }
 
       setSuccess(true);

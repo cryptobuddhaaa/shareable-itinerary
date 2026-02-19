@@ -5,6 +5,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from '../_lib/auth';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -16,10 +17,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userId } = req.body || {};
-  if (!userId) {
-    return res.status(400).json({ error: 'userId required' });
-  }
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
+  const userId = authUser.id;
 
   try {
     // Fetch existing trust data

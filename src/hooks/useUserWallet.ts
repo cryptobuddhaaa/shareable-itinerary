@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { authFetch } from '../lib/authFetch';
 import type { UserWallet } from '../models/types';
 
 interface UserWalletState {
@@ -130,9 +131,8 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
 
   verifyWallet: async (walletId: string, signature: string, message: string, walletAddress: string) => {
     try {
-      const response = await fetch('/api/wallet/verify', {
+      const response = await authFetch('/api/wallet/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletId, signature, message, walletAddress }),
       });
 

@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { authFetch } from '../lib/authFetch';
 import type { Handshake } from '../models/types';
 
 interface HandshakeState {
@@ -83,7 +84,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
       // (receiver_user_id is NULL until claimed, so RLS blocks the client query)
       let pendingForMe: Record<string, unknown>[] = [];
       try {
-        const response = await fetch(`/api/handshake?action=pending&userId=${userId}`);
+        const response = await authFetch(`/api/handshake?action=pending`);
         if (response.ok) {
           const result = await response.json();
           pendingForMe = result.handshakes || [];
@@ -116,10 +117,9 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   initiate: async (userId: string, contactId: string, walletAddress: string) => {
     try {
-      const response = await fetch('/api/handshake?action=initiate', {
+      const response = await authFetch('/api/handshake?action=initiate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, contactId, walletAddress }),
+        body: JSON.stringify({ contactId, walletAddress }),
       });
 
       if (!response.ok) {
@@ -141,9 +141,8 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   confirmTx: async (handshakeId: string, signedTransaction: string, side: 'initiator' | 'receiver') => {
     try {
-      const response = await fetch('/api/handshake?action=confirm-tx', {
+      const response = await authFetch('/api/handshake?action=confirm-tx', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handshakeId, signedTransaction, side }),
       });
 
@@ -152,7 +151,15 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
         throw new Error(err.error || 'Failed to confirm transaction');
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Refresh store so UI reflects the new status (matched, etc.)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await get().initialize(user.id);
+      }
+
+      return result;
     } catch (error) {
       console.error('Failed to confirm tx:', error);
       throw error;
@@ -161,15 +168,20 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
 
   mint: async (handshakeId: string) => {
     try {
-      const response = await fetch('/api/handshake?action=mint', {
+      const response = await authFetch('/api/handshake?action=mint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handshakeId }),
       });
 
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || 'Failed to mint');
+      }
+
+      // Refresh store so UI reflects minted status
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await get().initialize(user.id);
       }
 
       return true;

@@ -4,6 +4,7 @@
  */
 
 import type { ItineraryEvent } from '../models/types';
+import { authFetch } from '../lib/authFetch';
 
 export interface LumaEventsMetaInfo {
   calendarsQueried: number;
@@ -71,11 +72,8 @@ class GoogleCalendarService {
    * Exchanges authorization code for access token (server-side)
    */
   async exchangeCodeForToken(code: string): Promise<{ accessToken: string; refreshToken?: string }> {
-    const response = await fetch('/api/google-calendar/exchange-token', {
+    const response = await authFetch('/api/google-calendar/exchange-token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({ code }),
     });
 
@@ -94,11 +92,8 @@ class GoogleCalendarService {
     timeMin?: string,
     timeMax?: string
   ): Promise<{ events: GoogleCalendarEvent[]; meta?: LumaEventsMetaInfo }> {
-    const response = await fetch('/api/google-calendar/luma-events', {
+    const response = await authFetch('/api/google-calendar/luma-events', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({
         accessToken,
         timeMin,

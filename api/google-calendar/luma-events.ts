@@ -12,6 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAuth } from '../_lib/auth';
 
 interface GoogleCalendarItem {
   id: string;
@@ -105,6 +106,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
 
   try {
     const { accessToken, timeMin, timeMax } = req.body;

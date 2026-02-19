@@ -12,6 +12,7 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
+import { requireAuth } from '../_lib/auth';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -31,10 +32,14 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userId, contactId, walletAddress } = req.body || {};
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
+  const userId = authUser.id;
 
-  if (!userId || !contactId || !walletAddress) {
-    return res.status(400).json({ error: 'userId, contactId, and walletAddress required' });
+  const { contactId, walletAddress } = req.body || {};
+
+  if (!contactId || !walletAddress) {
+    return res.status(400).json({ error: 'contactId and walletAddress required' });
   }
 
   if (!TREASURY_WALLET) {
@@ -69,6 +74,12 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
     if (existing) {
       // If pending with no tx signature (user cancelled wallet signing), allow retry
       if (existing.status === 'pending' && !existing.initiator_tx_signature) {
+        // Update wallet address in case user switched wallets between attempts
+        await supabase
+          .from('handshakes')
+          .update({ initiator_wallet: walletAddress })
+          .eq('id', existing.id);
+
         // Rebuild the transaction for this existing handshake
         const connection = new Connection(SOLANA_RPC, 'confirmed');
         const payerKey = new PublicKey(walletAddress);
@@ -198,10 +209,14 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { handshakeId, userId, walletAddress } = req.body || {};
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
+  const userId = authUser.id;
 
-  if (!handshakeId || !userId || !walletAddress) {
-    return res.status(400).json({ error: 'handshakeId, userId, and walletAddress required' });
+  const { handshakeId, walletAddress } = req.body || {};
+
+  if (!handshakeId || !walletAddress) {
+    return res.status(400).json({ error: 'handshakeId and walletAddress required' });
   }
 
   if (!TREASURY_WALLET) {
@@ -247,8 +262,8 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
       .eq('user_id', userId)
       .single();
 
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-    const userEmail = authUser?.user?.email;
+    const { data: claimingUser } = await supabase.auth.admin.getUserById(userId);
+    const userEmail = claimingUser?.user?.email;
     const userTelegram = telegramLink?.telegram_username;
 
     const receiverId = handshake.receiver_identifier;
@@ -260,16 +275,24 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'You are not the intended receiver of this handshake' });
     }
 
-    // Mark as 'claimed' — NOT 'matched'. Status upgrades to 'matched' only
-    // after the receiver's payment is confirmed in handleConfirmTx.
-    await supabase
+    // Atomic claim: only update if status is still 'pending' (or 'claimed' by same user).
+    // This prevents TOCTOU races where two users claim simultaneously.
+    const statusFilter = handshake.status === 'claimed' ? 'claimed' : 'pending';
+    const { data: claimed, error: claimError } = await supabase
       .from('handshakes')
       .update({
         receiver_user_id: userId,
         receiver_wallet: walletAddress,
         status: 'claimed',
       })
-      .eq('id', handshakeId);
+      .eq('id', handshakeId)
+      .eq('status', statusFilter)
+      .select('id')
+      .single();
+
+    if (claimError || !claimed) {
+      return res.status(409).json({ error: 'Handshake was already claimed by someone else' });
+    }
 
     const connection = new Connection(SOLANA_RPC, 'confirmed');
     const payerKey = new PublicKey(walletAddress);
@@ -316,6 +339,9 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
+
   const { handshakeId, signedTransaction, side } = req.body || {};
 
   if (!handshakeId || !signedTransaction || !['initiator', 'receiver'].includes(side)) {
@@ -331,6 +357,14 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
 
     if (hsError || !handshake) {
       return res.status(404).json({ error: 'Handshake not found' });
+    }
+
+    // Verify the authenticated user matches the claimed side
+    if (side === 'initiator' && handshake.initiator_user_id !== authUser.id) {
+      return res.status(403).json({ error: 'Not authorized for this handshake' });
+    }
+    if (side === 'receiver' && handshake.receiver_user_id !== authUser.id) {
+      return res.status(403).json({ error: 'Not authorized for this handshake' });
     }
 
     const connection = new Connection(SOLANA_RPC, 'confirmed');
@@ -428,6 +462,9 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
+
   const { handshakeId } = req.body || {};
   if (!handshakeId) {
     return res.status(400).json({ error: 'handshakeId required' });
@@ -457,11 +494,18 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Handshake not found' });
     }
 
-    if (handshake.status === 'minted') {
+    // Verify the authenticated user is a participant
+    if (handshake.initiator_user_id !== authUser.id && handshake.receiver_user_id !== authUser.id) {
+      return res.status(403).json({ error: 'Not authorized for this handshake' });
+    }
+
+    // Allow retry of partially-minted handshakes (one NFT succeeded, other failed).
+    // A fully minted handshake with points already awarded is truly done.
+    if (handshake.status === 'minted' && handshake.initiator_nft_address && handshake.receiver_nft_address) {
       return res.status(409).json({ error: 'Already minted' });
     }
 
-    if (handshake.status !== 'matched') {
+    if (handshake.status !== 'matched' && handshake.status !== 'minted') {
       return res.status(400).json({ error: 'Handshake must be matched before minting' });
     }
 
@@ -481,14 +525,12 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
     const eventInfo = handshake.event_title || 'Meeting';
     const eventDate = handshake.event_date || new Date().toISOString().split('T')[0];
 
-    // Build off-chain metadata JSON (Metaplex Token Metadata standard).
-    // For devnet, we use a data URI. For mainnet, upload to Arweave/Irys.
     function buildMetadataUri(recipientWallet: string) {
       const metadata = {
         name: `Handshake: ${eventInfo}`,
         symbol: 'SHAKE',
         description: `Proof of Handshake at "${eventInfo}" on ${eventDate}. Both parties verified this connection on-chain.`,
-        image: '', // TODO: add handshake image for mainnet
+        image: '',
         attributes: [
           { trait_type: 'Event', value: eventInfo },
           { trait_type: 'Date', value: eventDate },
@@ -520,35 +562,58 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
       return base58.deserialize(signature)[0];
     }
 
-    const initiatorNftSig = await mintCNFT(handshake.initiator_wallet);
-    const receiverNftSig = await mintCNFT(handshake.receiver_wallet);
+    // Idempotent minting: skip NFTs that were already minted in a prior (partial) attempt.
+    // Save each NFT to DB immediately after minting to prevent double-mint on retry.
+    let initiatorNftSig = handshake.initiator_nft_address as string | null;
+    let receiverNftSig = handshake.receiver_nft_address as string | null;
 
+    if (!initiatorNftSig) {
+      initiatorNftSig = await mintCNFT(handshake.initiator_wallet);
+      await supabase
+        .from('handshakes')
+        .update({ initiator_nft_address: initiatorNftSig })
+        .eq('id', handshakeId);
+    }
+
+    if (!receiverNftSig) {
+      receiverNftSig = await mintCNFT(handshake.receiver_wallet);
+      await supabase
+        .from('handshakes')
+        .update({ receiver_nft_address: receiverNftSig })
+        .eq('id', handshakeId);
+    }
+
+    // Both minted — finalize status and award points
     await supabase
       .from('handshakes')
       .update({
         status: 'minted',
-        initiator_nft_address: initiatorNftSig,
-        receiver_nft_address: receiverNftSig,
         points_awarded: POINTS_PER_HANDSHAKE,
       })
       .eq('id', handshakeId);
 
-    const pointEntries = [
-      {
-        user_id: handshake.initiator_user_id,
-        handshake_id: handshakeId,
-        points: POINTS_PER_HANDSHAKE,
-        reason: `Handshake: ${eventInfo}`,
-      },
-      {
-        user_id: handshake.receiver_user_id,
-        handshake_id: handshakeId,
-        points: POINTS_PER_HANDSHAKE,
-        reason: `Handshake: ${eventInfo}`,
-      },
-    ];
+    // Idempotent points: only insert if not already awarded for this handshake
+    const { count: existingPoints } = await supabase
+      .from('user_points')
+      .select('*', { count: 'exact', head: true })
+      .eq('handshake_id', handshakeId);
 
-    await supabase.from('user_points').insert(pointEntries);
+    if (!existingPoints || existingPoints === 0) {
+      await supabase.from('user_points').insert([
+        {
+          user_id: handshake.initiator_user_id,
+          handshake_id: handshakeId,
+          points: POINTS_PER_HANDSHAKE,
+          reason: `Handshake: ${eventInfo}`,
+        },
+        {
+          user_id: handshake.receiver_user_id,
+          handshake_id: handshakeId,
+          points: POINTS_PER_HANDSHAKE,
+          reason: `Handshake: ${eventInfo}`,
+        },
+      ]);
+    }
 
     for (const uid of [handshake.initiator_user_id, handshake.receiver_user_id]) {
       if (uid) {
@@ -589,10 +654,9 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const userId = req.query.userId as string;
-  if (!userId) {
-    return res.status(400).json({ error: 'userId required' });
-  }
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
+  const userId = authUser.id;
 
   try {
     const { data: telegramLink } = await supabase
@@ -601,8 +665,8 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
       .eq('user_id', userId)
       .single();
 
-    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-    const userEmail = authUser?.user?.email;
+    const { data: pendingUser } = await supabase.auth.admin.getUserById(userId);
+    const userEmail = pendingUser?.user?.email;
     const userTelegram = telegramLink?.telegram_username;
 
     if (!userEmail && !userTelegram) {
@@ -625,6 +689,7 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
       .is('receiver_user_id', null)
       .neq('initiator_user_id', userId)
       .in('receiver_identifier', identifiers)
+      .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
 
     if (error) {

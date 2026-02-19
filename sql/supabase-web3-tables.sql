@@ -98,10 +98,9 @@ CREATE POLICY "Users can read own points"
   ON user_points FOR SELECT
   USING (auth.uid() = user_id);
 
--- Service role can insert points (server-side only)
-CREATE POLICY "Service can insert points"
-  ON user_points FOR INSERT
-  WITH CHECK (true); -- Controlled by service role key on server
+-- Points are inserted only via service role key (server-side), which bypasses RLS.
+-- No INSERT policy for regular users — prevents client-side point injection.
+-- (Service role key ignores RLS entirely, so no policy is needed for server inserts.)
 
 -- Trust scores for anti-sybil
 CREATE TABLE IF NOT EXISTS trust_scores (

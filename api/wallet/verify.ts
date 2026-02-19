@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
+import { requireAuth } from '../_lib/auth';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -19,6 +20,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
 
   const { walletId, signature, message, walletAddress } = req.body || {};
 
@@ -65,6 +69,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (wallet.wallet_address !== walletAddress) {
       return res.status(400).json({ error: 'Wallet address mismatch', verified: false });
+    }
+
+    // Verify the authenticated user owns this wallet row
+    if (wallet.user_id !== authUser.id) {
+      return res.status(403).json({ error: 'Not authorized to verify this wallet', verified: false });
     }
 
     // Already verified
@@ -115,17 +124,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to update verification' });
     }
 
-    // Update trust_scores: wallet_connected = true
-    const userIdMatch = message.match(/User: ([a-f0-9-]+)/);
-    if (userIdMatch) {
-      await supabase
-        .from('trust_scores')
-        .upsert({
-          user_id: userIdMatch[1],
-          wallet_connected: true,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-    }
+    // Update trust_scores: wallet_connected = true (use authenticated user ID, not message)
+    await supabase
+      .from('trust_scores')
+      .upsert({
+        user_id: authUser.id,
+        wallet_connected: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
 
     return res.status(200).json({ verified: true });
   } catch (error) {
