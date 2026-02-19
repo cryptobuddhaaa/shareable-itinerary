@@ -221,7 +221,7 @@ function App() {
           setActiveTab('dashboard');
           // Re-fetch handshakes so Dashboard shows the updated state
           if (user) initializeHandshakes(user.id);
-        }}}
+        }}
       />
     );
   }
