@@ -74,10 +74,17 @@ export async function unlinkTelegram(): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  // Delete the link first — FK cascade auto-deletes telegram_bot_state
   const { error } = await supabase
     .from('telegram_links')
     .delete()
     .eq('user_id', user.id);
 
   if (error) throw error;
+
+  // Clean up any unused link codes
+  await supabase
+    .from('telegram_link_codes')
+    .delete()
+    .eq('user_id', user.id);
 }

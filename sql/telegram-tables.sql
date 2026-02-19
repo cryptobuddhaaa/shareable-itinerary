@@ -20,8 +20,10 @@ CREATE TABLE telegram_link_codes (
 );
 
 -- 3. telegram_bot_state: Conversation state for each Telegram user
+--    FK cascade: deleting from telegram_links auto-deletes bot state
 CREATE TABLE telegram_bot_state (
-  telegram_user_id BIGINT PRIMARY KEY,
+  telegram_user_id BIGINT PRIMARY KEY
+    REFERENCES telegram_links(telegram_user_id) ON DELETE CASCADE,
   state TEXT NOT NULL DEFAULT 'idle',
   data JSONB DEFAULT '{}',
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -54,5 +56,11 @@ CREATE POLICY "Users can view own link codes"
   ON telegram_link_codes FOR SELECT
   USING (user_id = auth.uid());
 
+-- Users can delete their own codes (cleanup on unlink)
+CREATE POLICY "Users can delete own link codes"
+  ON telegram_link_codes FOR DELETE
+  USING (user_id = auth.uid());
+
 -- telegram_bot_state: No client-side policies needed
 -- Only accessed by the webhook via service role key
+-- Bot state is auto-deleted via FK cascade when telegram_links row is removed
