@@ -15,6 +15,7 @@ interface PointEntry {
   points: number;
   reason: string;
   createdAt: string;
+  handshakeId: string | null;
 }
 
 function mapRowToPoint(row: Record<string, unknown>): PointEntry {
@@ -23,6 +24,7 @@ function mapRowToPoint(row: Record<string, unknown>): PointEntry {
     points: row.points as number,
     reason: row.reason as string,
     createdAt: row.created_at as string,
+    handshakeId: (row.handshake_id as string) || null,
   };
 }
 
@@ -238,9 +240,9 @@ export default function Dashboard() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-green-400 hover:text-green-300 hover:underline text-xs whitespace-nowrap flex items-center gap-0.5"
-                            title="View NFT on Solana Explorer"
+                            title="View Minted Handshake on Solana Explorer"
                           >
-                            NFT
+                            Minted Handshake
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                             </svg>
@@ -273,15 +275,44 @@ export default function Dashboard() {
 
         {pointEntries.length > 0 ? (
           <div className="divide-y divide-slate-700/50">
-            {pointEntries.map((entry) => (
-              <div key={entry.id} className="flex items-center justify-between py-2.5">
-                <div>
-                  <p className="text-sm text-slate-200">{entry.reason}</p>
-                  <p className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
+            {pointEntries.map((entry) => {
+              const hs = entry.handshakeId
+                ? handshakes.find(h => h.id === entry.handshakeId)
+                : null;
+              const nftSig = hs?.status === 'minted'
+                ? (hs.initiatorUserId === user?.id ? hs.initiatorNftAddress : hs.receiverNftAddress)
+                : null;
+              const cluster = (import.meta.env.VITE_SOLANA_NETWORK as string) || 'devnet';
+              const nftUrl = nftSig
+                ? `https://explorer.solana.com/tx/${nftSig}${cluster !== 'mainnet-beta' ? `?cluster=${cluster}` : ''}`
+                : null;
+
+              return (
+                <div key={entry.id} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="text-sm text-slate-200">{entry.reason}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
+                      {nftUrl && (
+                        <a
+                          href={nftUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-400 hover:text-green-300 hover:underline text-xs flex items-center gap-0.5"
+                          title="View Minted Handshake on Solana Explorer"
+                        >
+                          Minted Handshake
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-green-400 font-mono font-medium">+{entry.points}</span>
                 </div>
-                <span className="text-green-400 font-mono font-medium">+{entry.points}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-8">
