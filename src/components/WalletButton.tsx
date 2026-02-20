@@ -226,6 +226,8 @@ export function WalletButton() {
   if (isTelegramWebApp && !primaryWallet && !connected) {
     const [copied, setCopied] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [showLoginUrl, setShowLoginUrl] = useState<string | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     // Copy text to clipboard with fallbacks for iOS Telegram webview
     const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -253,6 +255,35 @@ export function WalletButton() {
       return false;
     };
 
+    // If showing the URL for manual copy (iOS fallback)
+    if (showLoginUrl) {
+      return (
+        <div className="flex flex-col gap-2 w-full max-w-sm">
+          <p className="text-xs text-slate-400">Long-press to select, then copy and paste in your wallet browser:</p>
+          <div className="flex gap-1">
+            <input
+              ref={inputRef}
+              type="text"
+              readOnly
+              value={showLoginUrl}
+              onFocus={(e) => e.target.select()}
+              className="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-xs text-white font-mono break-all select-all"
+              style={{ userSelect: 'all', WebkitUserSelect: 'all' } as React.CSSProperties}
+            />
+            <button
+              onClick={() => setShowLoginUrl(null)}
+              className="px-2 py-1.5 text-xs text-slate-400 hover:text-white"
+              aria-label="Close"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center gap-2">
         <button
@@ -260,7 +291,6 @@ export function WalletButton() {
             if (generating) return;
             setGenerating(true);
             try {
-              // Generate a one-time login link so user stays signed in
               const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
               if (!response.ok) {
                 throw new Error('Failed to generate login link');
@@ -272,13 +302,8 @@ export function WalletButton() {
                 toast.success('Login link copied! Paste it in your Phantom or Solflare browser.');
                 setTimeout(() => setCopied(false), 3000);
               } else {
-                // Last resort: open login link directly in external browser
-                try {
-                  window.Telegram?.WebApp.openLink(url);
-                  toast.info('Opening in browser. Copy the URL from the address bar, then paste in your wallet browser.');
-                } catch {
-                  toast.error('Could not copy link. Please manually open the app in your wallet browser.');
-                }
+                // iOS fallback: show URL in a selectable input field
+                setShowLoginUrl(url);
               }
             } catch {
               toast.error('Failed to generate login link. Please try again.');
