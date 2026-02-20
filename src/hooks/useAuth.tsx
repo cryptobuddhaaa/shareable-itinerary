@@ -51,6 +51,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function initAuth() {
+      // Wait for Telegram SDK to load (if running inside Telegram)
+      if (window.__tgSdkReady) await window.__tgSdkReady;
+
+      // Signal to Telegram that the web app is ready (hides Telegram's loading spinner)
+      try {
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+          tg.ready();
+          tg.expand();
+        }
+      } catch { /* not in Telegram context */ }
+
       // First, check for existing Supabase session
       const { data: { session: existingSession } } = await supabase.auth.getSession();
 

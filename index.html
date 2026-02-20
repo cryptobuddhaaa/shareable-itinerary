@@ -6,12 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Itinerary & Contact Manager</title>
     <script>
-      // Only load Telegram WebApp SDK when running inside Telegram's in-app browser
-      if (location.hash.includes('tgWebAppData') || location.hash.includes('tgWebAppVersion')) {
-        var s = document.createElement('script');
-        s.src = 'https://telegram.org/js/telegram-web-app.js';
-        document.head.appendChild(s);
-      }
+      // Load Telegram WebApp SDK when running inside Telegram's in-app browser.
+      // Expose a promise so React can await SDK readiness before reading initData.
+      window.__tgSdkReady = new Promise(function(resolve) {
+        if (location.hash.includes('tgWebAppData') || location.hash.includes('tgWebAppVersion')) {
+          var s = document.createElement('script');
+          s.src = 'https://telegram.org/js/telegram-web-app.js';
+          s.onload = resolve;
+          s.onerror = resolve; // resolve anyway so auth doesn't hang
+          document.head.appendChild(s);
+        } else {
+          resolve();
+        }
+      });
     </script>
   </head>
   <body>
