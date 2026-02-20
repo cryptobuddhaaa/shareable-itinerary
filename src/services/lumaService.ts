@@ -1,3 +1,5 @@
+import { authFetch } from '../lib/authFetch';
+
 export interface LumaEventData {
   title: string;
   startTime: string;
@@ -35,7 +37,7 @@ export const lumaService = {
       // Use our serverless function as a CORS proxy
       const apiUrl = `/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
 
-      const response = await fetch(apiUrl, {
+      const response = await authFetch(apiUrl, {
         method: 'GET',
       });
 

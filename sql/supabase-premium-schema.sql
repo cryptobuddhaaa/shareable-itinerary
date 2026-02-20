@@ -37,15 +37,10 @@ CREATE POLICY "Users can view their own subscription"
   ON subscriptions FOR SELECT
   USING (auth.uid() = user_id);
 
+-- No INSERT/UPDATE policies for subscriptions — managed server-side via Stripe webhooks.
+-- This prevents users from self-assigning premium/pro tier via the Supabase JS client.
 DROP POLICY IF EXISTS "Users can insert their own subscription" ON subscriptions;
-CREATE POLICY "Users can insert their own subscription"
-  ON subscriptions FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can update their own subscription" ON subscriptions;
-CREATE POLICY "Users can update their own subscription"
-  ON subscriptions FOR UPDATE
-  USING (auth.uid() = user_id);
 
 -- Trigger to update updated_at
 CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()

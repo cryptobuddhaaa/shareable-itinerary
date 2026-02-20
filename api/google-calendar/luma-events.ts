@@ -97,7 +97,7 @@ async function fetchEventsFromCalendar(
     return [];
   }
 
-  const data = await response.json();
+  const data = await response.json() as { items?: GoogleCalendarItem[] };
   return data.items || [];
 }
 
@@ -141,7 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to fetch calendar list' });
     }
 
-    const calendarListData = await calendarListResponse.json();
+    const calendarListData = await calendarListResponse.json() as { items?: CalendarListEntry[] };
     const calendars: CalendarListEntry[] = calendarListData.items || [];
 
     // Step 2: Fetch events from all calendars in parallel

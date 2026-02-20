@@ -29,7 +29,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-gDyUEj4r3zTYJMs8EDrG7HeIp8jSk/vjtatm9uW2hEg=' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://*.lu.ma https://lu.ma https://oauth2.googleapis.com https://www.googleapis.com https://accounts.google.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com wss://api.devnet.solana.com wss://api.mainnet-beta.solana.com https://*.helius.xyz https://*.quiknode.pro https://*.triton.one ws:; frame-ancestors https://web.telegram.org https://desktop-app.telegram.org; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'sha256-gDyUEj4r3zTYJMs8EDrG7HeIp8jSk/vjtatm9uW2hEg=' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://*.lu.ma https://lu.ma https://oauth2.googleapis.com https://www.googleapis.com https://accounts.google.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com wss://api.devnet.solana.com wss://api.mainnet-beta.solana.com https://*.helius.xyz wss://*.helius.xyz https://*.quiknode.pro wss://*.quiknode.pro https://*.triton.one wss://*.triton.one; frame-ancestors https://web.telegram.org https://desktop-app.telegram.org; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
         }
       ]
     }

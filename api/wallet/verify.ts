@@ -46,14 +46,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid signature', verified: false });
     }
 
-    // Verify the message contains a valid user ID and recent timestamp
+    // Verify the message contains a recent timestamp — reject if missing or expired
     const timestampMatch = message.match(/Timestamp: (\d+)/);
-    if (timestampMatch) {
-      const timestamp = parseInt(timestampMatch[1], 10);
-      const fiveMinutes = 5 * 60 * 1000;
-      if (Date.now() - timestamp > fiveMinutes) {
-        return res.status(400).json({ error: 'Signature expired', verified: false });
-      }
+    if (!timestampMatch) {
+      return res.status(400).json({ error: 'Message must contain a timestamp', verified: false });
+    }
+    const timestamp = parseInt(timestampMatch[1], 10);
+    const fiveMinutes = 5 * 60 * 1000;
+    if (Date.now() - timestamp > fiveMinutes) {
+      return res.status(400).json({ error: 'Signature expired', verified: false });
     }
 
     // Check the wallet row exists and matches the address

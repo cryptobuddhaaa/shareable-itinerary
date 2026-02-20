@@ -76,9 +76,8 @@ CREATE POLICY "Users can create handshakes"
   ON handshakes FOR INSERT
   WITH CHECK (auth.uid() = initiator_user_id);
 
-CREATE POLICY "Users can update own handshakes"
-  ON handshakes FOR UPDATE
-  USING (auth.uid() = initiator_user_id OR auth.uid() = receiver_user_id);
+-- No UPDATE policy for handshakes — all updates go through API with service role key.
+-- This prevents users from directly modifying status, points, NFT addresses, etc.
 
 -- User points ledger
 CREATE TABLE IF NOT EXISTS user_points (

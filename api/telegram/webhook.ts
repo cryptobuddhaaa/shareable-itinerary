@@ -20,6 +20,16 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://shareable-itinerary.vercel.app';
 
+/** Escape user-controlled strings for Telegram HTML parse_mode */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Truncate user input to a safe max length before storing */
+function truncateInput(text: string, maxLen = 500): string {
+  return text.length > maxLen ? text.slice(0, maxLen) : text;
+}
+
 // Webhook secret derived from bot token
 const WEBHOOK_SECRET = crypto
   .createHash('sha256')
@@ -94,9 +104,9 @@ async function fetchLumaEvent(lumaUrl: string): Promise<LumaEventData | null> {
     const apiUrl = `${WEBAPP_URL}/api/fetch-luma?url=${encodeURIComponent(lumaUrl)}`;
     const response = await fetch(apiUrl);
     if (!response.ok) return null;
-    const data = await response.json();
+    const data = await response.json() as LumaEventData | null;
     if (!data || !data.title) return null;
-    return data as LumaEventData;
+    return data;
   } catch {
     return null;
   }
@@ -2630,7 +2640,7 @@ async function handleForwardNoteChoice(
     const { error } = await supabase.from('contact_notes').insert({
       contact_id: contactId,
       user_id: userId,
-      content: noteContent,
+      content: truncateInput(noteContent, 1000),
     });
 
     await clearState(telegramUserId);
@@ -3037,7 +3047,7 @@ async function handleContacted(
   if (error || !contacts || contacts.length === 0) {
     await sendMessage(
       chatId,
-      `❌ No contacts found with handle <b>${normalized}</b>.`
+      `❌ No contacts found with handle <b>${escapeHtml(normalized)}</b>.`
     );
     return;
   }
@@ -3055,7 +3065,7 @@ async function handleContacted(
 
   await sendMessage(
     chatId,
-    `✅ Marked <b>${nameList}</b> (${normalized}) as contacted just now.`
+    `✅ Marked <b>${escapeHtml(nameList)}</b> (${escapeHtml(normalized)}) as contacted just now.`
   );
 }
 
@@ -3209,10 +3219,11 @@ async function handleHandshakeSelection(
     .from('contacts')
     .select('id, first_name, last_name, telegram_handle, email')
     .eq('id', contactId)
+    .eq('user_id', userId)
     .single();
 
   if (!contact) {
-    await sendMessage(chatId, '❌ Contact not found.');
+    await sendMessage(chatId, '❌ Contact not found or not yours.');
     return;
   }
 
@@ -3275,13 +3286,13 @@ async function initiateHandshakeFromBot(
     return;
   }
 
-  const contactName = `${contact.first_name} ${contact.last_name || ''}`.trim();
+  const contactName = escapeHtml(`${contact.first_name} ${contact.last_name || ''}`.trim());
   const claimUrl = `${WEBAPP_URL}?claim=${handshake.id}`;
 
   await sendMessage(
     chatId,
     `🤝 <b>Handshake sent to ${contactName}!</b>\n\n` +
-      `Receiver: ${receiverIdentifier}\n` +
+      `Receiver: ${escapeHtml(receiverIdentifier)}\n` +
       `Fee: 0.01 SOL each (pay in the web app)\n` +
       `Expires: ${expiresAt.toLocaleDateString()}\n\n` +
       `⚠️ <b>Next steps:</b>\n` +
@@ -3309,7 +3320,7 @@ async function initiateHandshakeFromBot(
     if (receiverLink) {
       // Get initiator name
       const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-      const initiatorName = authUser?.user?.user_metadata?.full_name || authUser?.user?.email || 'Someone';
+      const initiatorName = escapeHtml(authUser?.user?.user_metadata?.full_name || authUser?.user?.email || 'Someone');
 
       await sendMessage(
         receiverLink.telegram_user_id,

@@ -71,7 +71,7 @@ class GoogleCalendarService {
   /**
    * Exchanges authorization code for access token (server-side)
    */
-  async exchangeCodeForToken(code: string): Promise<{ accessToken: string; refreshToken?: string }> {
+  async exchangeCodeForToken(code: string): Promise<{ accessToken: string }> {
     const response = await authFetch('/api/google-calendar/exchange-token', {
       method: 'POST',
       body: JSON.stringify({ code }),
@@ -148,11 +148,8 @@ class GoogleCalendarService {
    * Stores access token securely (in memory for this session)
    * In production, this should be encrypted and stored securely
    */
-  storeAccessToken(accessToken: string, refreshToken?: string): void {
+  storeAccessToken(accessToken: string): void {
     sessionStorage.setItem('google_calendar_access_token', accessToken);
-    if (refreshToken) {
-      sessionStorage.setItem('google_calendar_refresh_token', refreshToken);
-    }
   }
 
   /**

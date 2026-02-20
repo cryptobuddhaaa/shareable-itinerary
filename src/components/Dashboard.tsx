@@ -104,9 +104,13 @@ export default function Dashboard() {
           .limit(20);
 
         if (pointsData) {
-          const entries = pointsData.map(mapRowToPoint);
-          setPointEntries(entries);
-          setTotalPoints(entries.reduce((sum, e) => sum + e.points, 0));
+          setPointEntries(pointsData.map(mapRowToPoint));
+        }
+
+        // Use DB function for accurate total (not limited to 20 display entries)
+        const { data: totalData } = await supabase.rpc('get_user_total_points', { p_user_id: user.id });
+        if (typeof totalData === 'number') {
+          setTotalPoints(totalData);
         }
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
@@ -215,7 +219,7 @@ export default function Dashboard() {
                         {isReceiverPending && (
                           <button
                             onClick={() => {
-                              window.location.search = `?claim=${h.id}`;
+                              window.location.href = `${window.location.pathname}?claim=${h.id}`;
                             }}
                             className="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
                             aria-label={`Claim handshake from ${h.initiatorName || 'unknown'}`}

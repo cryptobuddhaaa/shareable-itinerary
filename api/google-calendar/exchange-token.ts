@@ -53,11 +53,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to exchange authorization code' });
     }
 
-    const tokens = await tokenResponse.json();
+    const tokens = await tokenResponse.json() as { access_token: string; expires_in: number };
 
+    // Only return the short-lived access token — never expose the refresh token to the client.
     return res.status(200).json({
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
     });
   } catch (error) {

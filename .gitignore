@@ -25,10 +25,12 @@ dist-ssr
 
 # Environment variables
 .env
+.env.*
 .env.local
 .env.*.local
 .env*.local
 *.env
+!.env.example
 .vercel
 
 # Secrets and credentials

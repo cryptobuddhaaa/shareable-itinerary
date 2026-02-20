@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireAuth } from './_lib/auth';
 
 export default async function handler(
   req: VercelRequest,
@@ -8,6 +9,9 @@ export default async function handler(
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
 
   const { url } = req.query;
 

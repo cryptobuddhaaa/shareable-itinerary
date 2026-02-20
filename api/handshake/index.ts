@@ -163,6 +163,9 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
       .insert({
@@ -175,6 +178,7 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
         initiator_wallet: walletAddress,
         mint_fee_lamports: MINT_FEE_LAMPORTS,
         status: 'pending',
+        expires_at: expiresAt.toISOString(),
       })
       .select('id')
       .single();
@@ -398,6 +402,47 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     const txBuffer = Buffer.from(signedTransaction, 'base64');
     const transaction = Transaction.from(txBuffer);
 
+    // Verify transaction content BEFORE broadcasting:
+    // Must contain exactly one SystemProgram.transfer to treasury for the correct amount.
+    const expectedWallet = side === 'initiator' ? handshake.initiator_wallet : handshake.receiver_wallet;
+    if (!expectedWallet) {
+      return res.status(400).json({ error: 'No wallet address on record for this side' });
+    }
+
+    const instructions = transaction.instructions;
+    if (instructions.length !== 1) {
+      return res.status(400).json({ error: 'Transaction must contain exactly one instruction' });
+    }
+
+    const ix = instructions[0];
+    const isSystemTransfer = ix.programId.equals(SystemProgram.programId);
+    if (!isSystemTransfer) {
+      return res.status(400).json({ error: 'Transaction must be a SystemProgram transfer' });
+    }
+
+    // Decode SystemProgram.transfer instruction data (4-byte type prefix + 8-byte LE lamports)
+    if (ix.data.length < 12) {
+      return res.status(400).json({ error: 'Invalid transfer instruction data' });
+    }
+    const transferType = ix.data.readUInt32LE(0);
+    if (transferType !== 2) {
+      return res.status(400).json({ error: 'Instruction is not a transfer' });
+    }
+    const lamports = Number(ix.data.readBigUInt64LE(4));
+    if (lamports !== MINT_FEE_LAMPORTS) {
+      return res.status(400).json({ error: `Transfer amount must be ${MINT_FEE_LAMPORTS} lamports (0.01 SOL)` });
+    }
+
+    // Verify accounts: key[0]=sender, key[1]=recipient
+    const senderKey = ix.keys[0]?.pubkey?.toBase58();
+    const recipientKey = ix.keys[1]?.pubkey?.toBase58();
+    if (senderKey !== expectedWallet) {
+      return res.status(400).json({ error: 'Transaction sender does not match registered wallet' });
+    }
+    if (recipientKey !== TREASURY_WALLET) {
+      return res.status(400).json({ error: 'Transaction recipient must be the treasury wallet' });
+    }
+
     const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
@@ -451,17 +496,28 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
         const firstName = nameParts[0] || initiatorUser?.user?.email?.split('@')[0] || 'Unknown';
         const lastName = nameParts.slice(1).join(' ') || '';
 
-        await supabase.from('contacts').insert({
-          user_id: handshake.receiver_user_id,
-          first_name: firstName,
-          last_name: lastName,
-          telegram_handle: initiatorTelegram?.telegram_username || null,
-          email: initiatorUser?.user?.email || null,
-          event_title: handshake.event_title || 'Handshake',
-          event_id: handshake.event_id || null,
-          itinerary_id: null,
-          date_met: handshake.event_date || new Date().toISOString().split('T')[0],
-        });
+        // contacts.itinerary_id is NOT NULL — find receiver's most recent itinerary
+        const { data: receiverItinerary } = await supabase
+          .from('itineraries')
+          .select('id')
+          .eq('user_id', handshake.receiver_user_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (receiverItinerary) {
+          await supabase.from('contacts').insert({
+            user_id: handshake.receiver_user_id,
+            first_name: firstName,
+            last_name: lastName,
+            telegram_handle: initiatorTelegram?.telegram_username || null,
+            email: initiatorUser?.user?.email || null,
+            event_title: handshake.event_title || 'Handshake',
+            event_id: handshake.event_id || 'handshake',
+            itinerary_id: receiverItinerary.id,
+            date_met: handshake.event_date || new Date().toISOString().split('T')[0],
+          });
+        }
       } catch (contactErr) {
         // Non-critical — don't fail the handshake if contact creation fails
         console.error('Failed to auto-add contact for receiver:', contactErr);
@@ -722,7 +778,7 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
 
     const { data, error } = await supabase
       .from('handshakes')
-      .select('*')
+      .select('id, initiator_user_id, receiver_identifier, event_title, event_date, status, created_at, expires_at')
       .eq('status', 'pending')
       .is('receiver_user_id', null)
       .neq('initiator_user_id', userId)
@@ -750,7 +806,14 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
     }
 
     const enriched = handshakes.map((h) => ({
-      ...h,
+      id: h.id,
+      initiator_user_id: h.initiator_user_id,
+      receiver_identifier: h.receiver_identifier,
+      event_title: h.event_title,
+      event_date: h.event_date,
+      status: h.status,
+      created_at: h.created_at,
+      expires_at: h.expires_at,
       initiator_name: nameMap[h.initiator_user_id] || 'Someone',
     }));
 
