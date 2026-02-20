@@ -218,35 +218,47 @@ export function WalletButton() {
     );
   }
 
-  // Detect Telegram WebApp — if no wallet found, offer to open in external browser
+  // Detect Telegram WebApp — wallets can't connect in Telegram's webview.
+  // Guide users to open the app URL in their wallet's in-app browser.
   const isTelegramWebApp = typeof window !== 'undefined' &&
     (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
   if (isTelegramWebApp && !primaryWallet && !connected) {
+    const appUrl = window.location.origin;
+    const [copied, setCopied] = useState(false);
     return (
-      <>
-        <div className="flex items-center gap-2">
-          <WalletMultiButton
-            style={{ backgroundColor: 'rgb(126, 34, 206)' }}
-          />
-          <button
-            onClick={() => {
+      <div className="flex items-center gap-2">
+        <button
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(appUrl);
+              setCopied(true);
+              toast.success('Link copied! Open it in your Phantom or Solflare browser.');
+              setTimeout(() => setCopied(false), 2000);
+            } catch {
+              // Fallback: open in external browser
               try {
-                window.Telegram?.WebApp.openLink(window.location.origin + window.location.pathname);
+                window.Telegram?.WebApp.openLink(appUrl);
               } catch {
-                window.open(window.location.origin + window.location.pathname, '_blank');
+                window.open(appUrl, '_blank');
               }
-            }}
-            className="text-xs text-slate-400 hover:text-slate-200 whitespace-nowrap"
-            title="Open in external browser to connect wallet"
-            aria-label="Open in browser"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 rounded-md hover:bg-purple-900/60 transition-colors"
+          title="Copy link to open in wallet browser"
+          aria-label="Copy app link for wallet browser"
+        >
+          {copied ? (
+            <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-          </button>
-        </div>
-        <ConfirmDialog {...dialogProps} />
-      </>
+          ) : (
+            <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+          )}
+          <span className="text-xs text-purple-300">{copied ? 'Copied!' : 'Open in wallet browser'}</span>
+        </button>
+      </div>
     );
   }
 
