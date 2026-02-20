@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useContacts } from '../hooks/useContacts';
+import { useAuth } from '../hooks/useAuth';
 import ContactsList from './ContactsList';
 import ContactForm from './ContactForm';
 import InviteDialog from './InviteDialog';
@@ -13,7 +14,13 @@ import {
 type SortOption = 'dateMet' | 'firstName' | 'lastName' | 'lastContacted';
 
 export default function ContactsPage() {
-  const { contacts, tags, addTag, deleteTag } = useContacts();
+  const { user } = useAuth();
+  const { contacts, tags, addTag, deleteTag, initialize } = useContacts();
+
+  // Auto-refresh contacts when tab is opened (component mounts)
+  useEffect(() => {
+    if (user) initialize(user.id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('dateMet');
   const [filterTag, setFilterTag] = useState<string | null>(null);
