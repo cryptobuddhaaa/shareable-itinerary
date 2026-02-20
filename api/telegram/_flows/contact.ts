@@ -1,11 +1,11 @@
 // /newcontact flow — contact creation with field-by-field input
 
-import { supabase, WEBAPP_URL } from '../lib/config.ts';
-import { sendMessage, answerCallbackQuery } from '../lib/telegram.ts';
-import { getState, setState, clearState, getLinkedUserId } from '../lib/state.ts';
-import { escapeHtml } from '../lib/utils.ts';
-import type { BotState, EventInfo, FieldConfig } from '../lib/types.ts';
-import { showEventConfirmation } from './event.ts';
+import { supabase, WEBAPP_URL } from '../_lib/config';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram';
+import { getState, setState, clearState, getLinkedUserId } from '../_lib/state';
+import { escapeHtml } from '../_lib/utils';
+import type { BotState, EventInfo, FieldConfig } from '../_lib/types';
+import { showEventConfirmation } from './event';
 
 // --- Contact field input flow ---
 export const FIELD_FLOW: FieldConfig[] = [

@@ -1,10 +1,10 @@
 // Forward-to-contact flow — auto-create contact from forwarded messages
 
-import { supabase } from '../lib/config.ts';
-import { sendMessage, answerCallbackQuery } from '../lib/telegram.ts';
-import { getState, setState, clearState, getLinkedUserId } from '../lib/state.ts';
-import { escapeHtml, truncateInput } from '../lib/utils.ts';
-import { showContactConfirmation } from './contact.ts';
+import { supabase } from '../_lib/config';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram';
+import { getState, setState, clearState, getLinkedUserId } from '../_lib/state';
+import { escapeHtml, truncateInput } from '../_lib/utils';
+import { showContactConfirmation } from './contact';
 
 export async function handleForwardedMessage(
   chatId: number,

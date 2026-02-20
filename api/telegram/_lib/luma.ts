@@ -1,6 +1,6 @@
 // Luma URL parsing and event fetching
 
-import type { LumaEventData } from './types.ts';
+import type { LumaEventData } from './types';
 
 export const LUMA_URL_REGEX = /https?:\/\/(?:lu\.ma\/[^\s<>)]+|(?:www\.)?luma\.com\/(?:event\/)?[^\s<>)]+)/gi;
 

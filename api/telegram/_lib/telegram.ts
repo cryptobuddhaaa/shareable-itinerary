@@ -1,6 +1,6 @@
 // Telegram Bot API helpers
 
-import { TELEGRAM_API } from './config.ts';
+import { TELEGRAM_API } from './config';
 
 export async function sendMessage(
   chatId: number,

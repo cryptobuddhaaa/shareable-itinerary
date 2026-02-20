@@ -1,10 +1,10 @@
 // /contacts, /itineraries, /today — read-only viewing flows
 
-import { supabase, WEBAPP_URL } from '../lib/config.ts';
-import { sendMessage, answerCallbackQuery } from '../lib/telegram.ts';
-import { getLinkedUserId } from '../lib/state.ts';
-import { escapeHtml, isSafeUrl, sanitizeHandle, getTimeAgo } from '../lib/utils.ts';
-import type { ParsedEvent } from '../lib/types.ts';
+import { supabase, WEBAPP_URL } from '../_lib/config';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram';
+import { getLinkedUserId } from '../_lib/state';
+import { escapeHtml, isSafeUrl, sanitizeHandle, getTimeAgo } from '../_lib/utils';
+import type { ParsedEvent } from '../_lib/types';
 
 export async function handleItineraries(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);
