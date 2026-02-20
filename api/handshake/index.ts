@@ -607,6 +607,33 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
 
     const eventInfo = handshake.event_title || 'Meeting';
 
+    // Look up names for both parties (for points history display)
+    const { data: initiatorUserData } = await supabase.auth.admin.getUserById(handshake.initiator_user_id);
+    const initiatorName = initiatorUserData?.user?.user_metadata?.full_name
+      || initiatorUserData?.user?.email?.split('@')[0]
+      || 'Unknown';
+
+    let receiverName = 'Unknown';
+    if (handshake.receiver_user_id) {
+      const { data: receiverUserData } = await supabase.auth.admin.getUserById(handshake.receiver_user_id);
+      receiverName = receiverUserData?.user?.user_metadata?.full_name
+        || receiverUserData?.user?.email?.split('@')[0]
+        || 'Unknown';
+    }
+
+    // Also look up contact name from the initiator's contact record
+    let contactName = receiverName;
+    if (handshake.contact_id) {
+      const { data: contactData } = await supabase
+        .from('contacts')
+        .select('first_name, last_name')
+        .eq('id', handshake.contact_id)
+        .single();
+      if (contactData) {
+        contactName = `${contactData.first_name} ${contactData.last_name}`.trim() || receiverName;
+      }
+    }
+
     // Bubblegum cNFTs limit the URI to ~200 chars. Use a short empty placeholder
     // since on-chain metadata (name) already identifies the handshake.
     const metadataUri = '';
@@ -670,13 +697,13 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
           user_id: handshake.initiator_user_id,
           handshake_id: handshakeId,
           points: POINTS_PER_HANDSHAKE,
-          reason: `Handshake: ${eventInfo}`,
+          reason: `Handshake: ${contactName}`,
         },
         {
           user_id: handshake.receiver_user_id,
           handshake_id: handshakeId,
           points: POINTS_PER_HANDSHAKE,
-          reason: `Handshake: ${eventInfo}`,
+          reason: `Handshake: ${initiatorName}`,
         },
       ]);
     }

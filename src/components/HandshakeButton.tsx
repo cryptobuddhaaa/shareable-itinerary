@@ -46,7 +46,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
       case 'matched':
         return { label: 'Matched', color: 'text-blue-400', bgColor: 'bg-blue-900/30 border-blue-700/50' };
       case 'minted':
-        return { label: 'Minted', color: 'text-green-400', bgColor: 'bg-green-900/30 border-green-700/50' };
+        return { label: 'Minted Handshake', color: 'text-green-400', bgColor: 'bg-green-900/30 border-green-700/50' };
       default:
         return { label: hs.status, color: 'text-slate-400', bgColor: 'bg-slate-800 border-slate-700' };
     }
@@ -99,7 +99,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
             className="text-green-400 hover:text-green-300 hover:underline flex items-center gap-1"
             title="View NFT on Solana Explorer"
           >
-            Minted
+            Minted Handshake
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
@@ -110,7 +110,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
             disabled={loading}
             className="text-blue-400 hover:text-blue-300 underline"
           >
-            {loading ? 'Minting...' : 'Mint NFTs'}
+            {loading ? 'Minting...' : 'Mint Handshake NFTs'}
           </button>
         ) : (
           <span className={info.color}>{info.label}</span>

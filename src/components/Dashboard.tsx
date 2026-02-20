@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useHandshakes } from '../hooks/useHandshakes';
+import { useContacts } from '../hooks/useContacts';
 import { useUserWallet } from '../hooks/useUserWallet';
 import type { TrustScore } from '../models/types';
 
@@ -72,6 +73,7 @@ function SignalRow({ label, active, points }: { label: string; active: boolean; 
 export default function Dashboard() {
   const { user } = useAuth();
   const { handshakes } = useHandshakes();
+  const { contacts } = useContacts();
   const { getPrimaryWallet } = useUserWallet();
   const [trustScore, setTrustScore] = useState<TrustScore | null>(null);
   const [pointEntries, setPointEntries] = useState<PointEntry[]>([]);
@@ -210,9 +212,12 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 min-w-0">
                         <StatusDot status={h.status} />
                         <span className="text-slate-300 truncate">
-                          {h.initiatorName && h.initiatorUserId !== user?.id
-                            ? `From ${h.initiatorName}`
-                            : h.eventTitle || h.receiverIdentifier || 'Handshake'}
+                          {h.initiatorUserId === user?.id
+                            ? `To ${(() => {
+                                const c = contacts.find(ct => ct.id === h.contactId);
+                                return c ? `${c.firstName} ${c.lastName}`.trim() : h.receiverIdentifier;
+                              })()}`
+                            : `From ${h.initiatorName || h.receiverIdentifier || 'Unknown'}`}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 ml-2">
