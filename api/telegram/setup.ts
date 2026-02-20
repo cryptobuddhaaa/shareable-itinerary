@@ -41,8 +41,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .digest('hex')
     .substring(0, 32);
 
-  // Build webhook URL from Vercel's trusted headers
-  const host = req.headers['x-vercel-deployment-url'] || req.headers.host;
+  // Build webhook URL from the stable production domain (not deployment-specific URL)
+  const webappUrl = process.env.WEBAPP_URL;
+  const host = webappUrl
+    ? new URL(webappUrl).host
+    : req.headers.host;
   const webhookUrl = `https://${host}/api/telegram/webhook`;
 
   const response = await fetch(
