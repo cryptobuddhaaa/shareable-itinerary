@@ -20,3 +20,23 @@
     scrollbar-width: none;  /* Firefox */
   }
 }
+
+/* Override Solana wallet-adapter button styles for compact header layout */
+.wallet-adapter-button.wallet-adapter-button-trigger {
+  height: 34px !important;
+  font-size: 12px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}
+
+.wallet-adapter-button.wallet-adapter-button-trigger .wallet-adapter-button-start-icon {
+  width: 16px !important;
+  height: 16px !important;
+  margin-right: 6px !important;
+}

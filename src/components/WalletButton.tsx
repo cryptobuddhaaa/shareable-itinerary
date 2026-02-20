@@ -251,20 +251,10 @@ export function WalletButton() {
     return (
       <>
         <WalletMultiButton
-          style={{
-            height: '34px',
-            fontSize: '12px',
-            padding: '0 12px',
-            borderRadius: '6px',
-            backgroundColor: 'rgb(71, 85, 105)',
-            lineHeight: '34px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          style={{ backgroundColor: 'rgb(71, 85, 105)' }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#64748b', display: 'inline-block' }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#64748b', display: 'inline-block', flexShrink: 0 }} />
             {shortAddress} — Reconnect
           </span>
         </WalletMultiButton>
@@ -277,17 +267,7 @@ export function WalletButton() {
   return (
     <>
       <WalletMultiButton
-        style={{
-          height: '34px',
-          fontSize: '12px',
-          padding: '0 12px',
-          borderRadius: '6px',
-          backgroundColor: 'rgb(126, 34, 206)',
-          lineHeight: '34px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        style={{ backgroundColor: 'rgb(126, 34, 206)' }}
       />
       <ConfirmDialog {...dialogProps} />
     </>
