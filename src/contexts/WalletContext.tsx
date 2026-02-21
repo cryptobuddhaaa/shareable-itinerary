@@ -72,77 +72,91 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
     };
 
     const w = window as unknown as Record<string, unknown>;
-
-    // 1. Dump SolflareApp keys
-    const sfApp = w.SolflareApp;
-    if (sfApp && typeof sfApp === 'object') {
-      const keys = Object.getOwnPropertyNames(sfApp);
-      dbg('SolflareApp keys: ' + keys.join(', '));
-      const proto = Object.getPrototypeOf(sfApp);
-      if (proto && proto !== Object.prototype) {
-        const protoKeys = Object.getOwnPropertyNames(proto).filter(k => k !== 'constructor');
-        dbg('SolflareApp proto: ' + protoKeys.join(', '));
-      }
-    } else {
-      dbg('SolflareApp: ' + String(sfApp));
-    }
-
-    // 2. Check navigator.wallets
-    const navWallets = (navigator as unknown as Record<string, unknown>).wallets;
-    dbg('navigator.wallets type=' + typeof navWallets);
-    if (navWallets && typeof navWallets === 'object') {
-      dbg('navigator.wallets keys: ' + Object.keys(navWallets as object).join(', '));
-      if (Array.isArray(navWallets)) {
-        dbg('navigator.wallets is array, length=' + navWallets.length);
-      }
-    }
-
-    // 3. Wallet Standard registry
     const { get, on, register } = getWallets();
-    const all = get();
-    dbg('[WalletStd] Registered wallets: ' + all.length);
-    all.forEach((wallet, i) => {
-      const features = Object.keys(wallet.features).join(', ');
-      const compat = isWalletAdapterCompatibleStandardWallet(wallet);
-      dbg(`  [${i}] "${wallet.name}" compat=${compat} features=${features}`);
+
+    // Listen for any wallet-standard:register-wallet events (raw DOM level)
+    window.addEventListener('wallet-standard:register-wallet', (e) => {
+      dbg('CAUGHT wallet-standard:register-wallet event!');
+      dbg('  event detail type: ' + typeof (e as CustomEvent).detail);
     });
 
-    // 4. Try to re-trigger wallet standard registration
-    // Solflare may have registered before our listener was ready.
-    // Reset the flag and re-dispatch app-ready to trigger re-registration.
-    const wasInit = w.solflareWalletStandardInitialized;
-    dbg('solflareWalletStandardInitialized=' + String(wasInit));
-    if (wasInit) {
-      dbg('Resetting flag and re-dispatching app-ready...');
-      w.solflareWalletStandardInitialized = false;
-      try {
-        const api = Object.freeze({ register });
-        window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: api }));
-        dbg('app-ready dispatched');
-      } catch (e) {
-        dbg('app-ready dispatch failed: ' + (e as Error).message);
-      }
-      // Check again after a short delay
-      setTimeout(() => {
-        const after = get();
-        dbg('[WalletStd] After re-trigger: ' + after.length + ' wallets');
-        after.forEach((wallet, i) => {
-          const features = Object.keys(wallet.features).join(', ');
-          const compat = isWalletAdapterCompatibleStandardWallet(wallet);
-          dbg(`  [${i}] "${wallet.name}" compat=${compat} features=${features}`);
-        });
-      }, 1000);
-    }
-
-    const off = on('register', (...wallets) => {
-      dbg('[WalletStd] register event: +' + wallets.length + ' (' + wallets.map(wallet => wallet.name).join(', ') + ')');
+    // Monitor wallet standard register events
+    const off = on('register', (...registeredWallets) => {
+      dbg('[WalletStd] register event: +' + registeredWallets.length);
       const updated = get();
       updated.forEach((wallet, i) => {
         const features = Object.keys(wallet.features).join(', ');
         const compat = isWalletAdapterCompatibleStandardWallet(wallet);
-        dbg(`  [${i}] "${wallet.name}" compat=${compat} features=${features}`);
+        dbg(`  [${i}] "${wallet.name}" compat=${compat}`);
+        dbg(`    features: ${features}`);
       });
     });
+
+    dbg('[WalletStd] Initial registered: ' + get().length);
+
+    // Try to trigger native wallet standard registration via WKWebView handler
+    const handler = w.solflareWalletStandardInitialized;
+    dbg('handler type: ' + typeof handler + ' = ' + String(handler));
+
+    if (handler && typeof (handler as { postMessage?: unknown }).postMessage === 'function') {
+      dbg('Calling solflareWalletStandardInitialized.postMessage(null)...');
+      try {
+        (handler as { postMessage: (v: unknown) => void }).postMessage(null);
+        dbg('postMessage(null) called OK');
+      } catch (e) {
+        dbg('postMessage(null) error: ' + (e as Error).message);
+      }
+
+      // Also try with empty string and empty object
+      setTimeout(() => {
+        dbg('After 500ms: registered=' + get().length);
+        if (get().length === 0) {
+          dbg('Trying postMessage("")...');
+          try {
+            (handler as { postMessage: (v: unknown) => void }).postMessage('');
+            dbg('postMessage("") called OK');
+          } catch (e) {
+            dbg('postMessage("") error: ' + (e as Error).message);
+          }
+        }
+      }, 500);
+
+      // Also try via SolflareApp.postMessage
+      setTimeout(() => {
+        dbg('After 1s: registered=' + get().length);
+        const sfApp = w.SolflareApp;
+        if (get().length === 0 && sfApp && typeof (sfApp as { postMessage?: unknown }).postMessage === 'function') {
+          dbg('Trying SolflareApp.postMessage wallet_standard_init...');
+          try {
+            (sfApp as { postMessage: (v: string) => void }).postMessage(JSON.stringify({
+              type: 'wallet_standard_init'
+            }));
+            dbg('SolflareApp.postMessage called OK');
+          } catch (e) {
+            dbg('SolflareApp.postMessage error: ' + (e as Error).message);
+          }
+        }
+      }, 1000);
+
+      // Check window.webkit.messageHandlers too
+      setTimeout(() => {
+        dbg('After 2s: registered=' + get().length);
+        const webkit = w.webkit as { messageHandlers?: Record<string, unknown> } | undefined;
+        if (webkit?.messageHandlers) {
+          const handlerNames = Object.keys(webkit.messageHandlers);
+          dbg('webkit.messageHandlers: ' + handlerNames.join(', '));
+        } else {
+          dbg('No webkit.messageHandlers found');
+        }
+        // Also check if there's a solflare wallet standard script we can find
+        const scripts = document.querySelectorAll('script[src*="solflare"]');
+        dbg('Solflare scripts: ' + scripts.length);
+        scripts.forEach((s, i) => dbg(`  [${i}] ${(s as HTMLScriptElement).src}`));
+      }, 2000);
+    } else {
+      dbg('No postMessage on handler');
+    }
+
     return off;
   }, []);
   // ── END DEBUG ──
