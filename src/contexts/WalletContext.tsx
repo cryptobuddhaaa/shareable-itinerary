@@ -55,9 +55,7 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
 
   // ── DEBUG: Wallet Standard registry probe ──
   useEffect(() => {
-    const { get, on } = getWallets();
-    function dumpWallets(label: string) {
-      const all = get();
+    const dbg = (msg: string) => {
       const el = document.getElementById('__sfdbg') || (() => {
         const d = document.createElement('div');
         d.id = '__sfdbg';
@@ -69,20 +67,81 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
         return d;
       })();
       const ts = new Date().toISOString().slice(11, 23);
-      el.textContent += `\n${ts} [WalletStd] ${label}\n`;
-      el.textContent += `  Registered wallets: ${all.length}\n`;
-      all.forEach((w, i) => {
-        const features = Object.keys(w.features).join(', ');
-        const compatible = isWalletAdapterCompatibleStandardWallet(w);
-        el.textContent += `  [${i}] "${w.name}" compatible=${compatible}\n`;
-        el.textContent += `    features: ${features}\n`;
-        el.textContent += `    chains: ${w.chains?.join(', ') ?? 'none'}\n`;
-      });
+      el.textContent += `${ts} ${msg}\n`;
       el.scrollTop = el.scrollHeight;
+    };
+
+    const w = window as unknown as Record<string, unknown>;
+
+    // 1. Dump SolflareApp keys
+    const sfApp = w.SolflareApp;
+    if (sfApp && typeof sfApp === 'object') {
+      const keys = Object.getOwnPropertyNames(sfApp);
+      dbg('SolflareApp keys: ' + keys.join(', '));
+      const proto = Object.getPrototypeOf(sfApp);
+      if (proto && proto !== Object.prototype) {
+        const protoKeys = Object.getOwnPropertyNames(proto).filter(k => k !== 'constructor');
+        dbg('SolflareApp proto: ' + protoKeys.join(', '));
+      }
+    } else {
+      dbg('SolflareApp: ' + String(sfApp));
     }
-    dumpWallets('initial');
+
+    // 2. Check navigator.wallets
+    const navWallets = (navigator as unknown as Record<string, unknown>).wallets;
+    dbg('navigator.wallets type=' + typeof navWallets);
+    if (navWallets && typeof navWallets === 'object') {
+      dbg('navigator.wallets keys: ' + Object.keys(navWallets as object).join(', '));
+      if (Array.isArray(navWallets)) {
+        dbg('navigator.wallets is array, length=' + navWallets.length);
+      }
+    }
+
+    // 3. Wallet Standard registry
+    const { get, on, register } = getWallets();
+    const all = get();
+    dbg('[WalletStd] Registered wallets: ' + all.length);
+    all.forEach((wallet, i) => {
+      const features = Object.keys(wallet.features).join(', ');
+      const compat = isWalletAdapterCompatibleStandardWallet(wallet);
+      dbg(`  [${i}] "${wallet.name}" compat=${compat} features=${features}`);
+    });
+
+    // 4. Try to re-trigger wallet standard registration
+    // Solflare may have registered before our listener was ready.
+    // Reset the flag and re-dispatch app-ready to trigger re-registration.
+    const wasInit = w.solflareWalletStandardInitialized;
+    dbg('solflareWalletStandardInitialized=' + String(wasInit));
+    if (wasInit) {
+      dbg('Resetting flag and re-dispatching app-ready...');
+      w.solflareWalletStandardInitialized = false;
+      try {
+        const api = Object.freeze({ register });
+        window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: api }));
+        dbg('app-ready dispatched');
+      } catch (e) {
+        dbg('app-ready dispatch failed: ' + (e as Error).message);
+      }
+      // Check again after a short delay
+      setTimeout(() => {
+        const after = get();
+        dbg('[WalletStd] After re-trigger: ' + after.length + ' wallets');
+        after.forEach((wallet, i) => {
+          const features = Object.keys(wallet.features).join(', ');
+          const compat = isWalletAdapterCompatibleStandardWallet(wallet);
+          dbg(`  [${i}] "${wallet.name}" compat=${compat} features=${features}`);
+        });
+      }, 1000);
+    }
+
     const off = on('register', (...wallets) => {
-      dumpWallets(`register event (+${wallets.length}: ${wallets.map(w => w.name).join(', ')})`);
+      dbg('[WalletStd] register event: +' + wallets.length + ' (' + wallets.map(wallet => wallet.name).join(', ') + ')');
+      const updated = get();
+      updated.forEach((wallet, i) => {
+        const features = Object.keys(wallet.features).join(', ');
+        const compat = isWalletAdapterCompatibleStandardWallet(wallet);
+        dbg(`  [${i}] "${wallet.name}" compat=${compat} features=${features}`);
+      });
     });
     return off;
   }, []);
