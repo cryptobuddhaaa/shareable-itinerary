@@ -72,8 +72,8 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
     };
 
     const w = window as unknown as Record<string, unknown>;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { get, on, register } = getWallets();
+    const walletStd = getWallets();
+    const { get, on } = walletStd;
 
     // Listen for any wallet-standard:register-wallet events (raw DOM level)
     window.addEventListener('wallet-standard:register-wallet', (e) => {
