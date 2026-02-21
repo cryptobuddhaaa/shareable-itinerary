@@ -8,7 +8,7 @@ export default function Login() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
           <img src="/logo.svg" alt="Logo" className="mx-auto w-24 h-24 mb-4" />
-          <h1 className="text-4xl font-bold text-white">Itinerary & Contact Manager</h1>
+          <h1 className="text-4xl font-bold text-white">Convenu</h1>
           <p className="mt-2 text-sm text-slate-400">All in one trip planning and networking tool</p>
         </div>
       </div>

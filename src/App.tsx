@@ -329,7 +329,7 @@ function App() {
             <div className="flex items-center gap-3 flex-shrink-0">
               <img src="/logo.svg" alt="Logo" className="w-10 h-10 sm:w-12 sm:h-12" />
               <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-white">Itinerary & Contact Manager</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">Convenu</h1>
                 <p className="text-xs sm:text-sm text-slate-400 mt-1">All in one trip planning and networking tool</p>
               </div>
             </div>
