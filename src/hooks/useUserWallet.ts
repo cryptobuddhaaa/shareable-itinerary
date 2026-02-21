@@ -44,7 +44,7 @@ export const useUserWallet = create<UserWalletState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('user_wallets')
-        .select('*')
+        .select('id, user_id, wallet_address, is_primary, verified_at, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: true });
 

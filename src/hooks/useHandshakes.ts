@@ -71,7 +71,7 @@ export const useHandshakes = create<HandshakeState>((set, get) => ({
       // Fetch handshakes where user is initiator or already-claimed receiver
       const { data: ownData, error: ownError } = await supabase
         .from('handshakes')
-        .select('*')
+        .select('id, initiator_user_id, receiver_user_id, receiver_identifier, contact_id, event_id, event_title, event_date, initiator_wallet, receiver_wallet, initiator_minted_at, receiver_minted_at, status, initiator_nft_address, receiver_nft_address, initiator_tx_signature, receiver_tx_signature, points_awarded, mint_fee_lamports, created_at, expires_at')
         .or(`initiator_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
         .in('status', ['pending', 'claimed', 'matched', 'minted'])
         .order('created_at', { ascending: false });

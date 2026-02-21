@@ -245,7 +245,7 @@ async function handleClaim(req: VercelRequest, res: VercelResponse) {
     const { Connection, PublicKey, Transaction, SystemProgram } = await import('@solana/web3.js');
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
-      .select('*')
+      .select('id, status, receiver_user_id, initiator_user_id, expires_at, receiver_identifier')
       .eq('id', handshakeId)
       .single();
 
@@ -378,7 +378,7 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
     const { Connection, Transaction, SystemProgram } = await import('@solana/web3.js');
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
-      .select('*')
+      .select('id, status, initiator_user_id, receiver_user_id, initiator_wallet, receiver_wallet, event_title, event_id, event_date')
       .eq('id', handshakeId)
       .single();
 
@@ -495,7 +495,7 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
         if (initiatorEmail) {
           const { count } = await supabase
             .from('contacts')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
             .eq('user_id', handshake.receiver_user_id)
             .ilike('email', initiatorEmail);
           if (count && count > 0) alreadyExists = true;
@@ -503,7 +503,7 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
         if (!alreadyExists && initiatorTg) {
           const { count } = await supabase
             .from('contacts')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
             .eq('user_id', handshake.receiver_user_id)
             .ilike('telegram_handle', initiatorTg);
           if (count && count > 0) alreadyExists = true;
@@ -588,7 +588,7 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
 
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
-      .select('*')
+      .select('id, status, initiator_user_id, receiver_user_id, initiator_nft_address, receiver_nft_address, initiator_tx_signature, receiver_tx_signature, initiator_wallet, receiver_wallet, contact_id, event_title')
       .eq('id', handshakeId)
       .single();
 
@@ -705,7 +705,7 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
     // Idempotent points: only insert if not already awarded for this handshake
     const { count: existingPoints } = await supabase
       .from('user_points')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('handshake_id', handshakeId);
 
     if (!existingPoints || existingPoints === 0) {
@@ -729,7 +729,7 @@ async function handleMint(req: VercelRequest, res: VercelResponse) {
       if (uid) {
         const { count } = await supabase
           .from('handshakes')
-          .select('*', { count: 'exact', head: true })
+          .select('id', { count: 'exact', head: true })
           .eq('status', 'minted')
           .or(`initiator_user_id.eq.${uid},receiver_user_id.eq.${uid}`);
 
@@ -812,7 +812,7 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
     // These need initiator info enrichment so the client can match them to contacts.
     const { data: receiverRows, error: receiverError } = await supabase
       .from('handshakes')
-      .select('*')
+      .select('id, initiator_user_id, receiver_user_id, receiver_identifier, contact_id, event_id, event_title, event_date, initiator_wallet, receiver_wallet, initiator_minted_at, receiver_minted_at, status, initiator_nft_address, receiver_nft_address, initiator_tx_signature, receiver_tx_signature, points_awarded, mint_fee_lamports, created_at, expires_at')
       .eq('receiver_user_id', userId)
       .in('status', ['claimed', 'matched', 'minted'])
       .order('created_at', { ascending: false });

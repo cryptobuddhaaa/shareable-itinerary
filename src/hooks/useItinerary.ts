@@ -32,7 +32,7 @@ interface ItineraryState {
   reset: () => void;
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 11);
+const generateId = () => crypto.randomUUID().replace(/-/g, '').substring(0, 9);
 
 function syncToSupabase(currentId: string, updated: Itinerary) {
   supabase
@@ -88,7 +88,7 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('itineraries')
-        .select('*')
+        .select('id, title, description, start_date, end_date, location, data, created_by_name, created_by_email, created_at, updated_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 

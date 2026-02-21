@@ -108,12 +108,12 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       const [contactsRes, tagsRes] = await Promise.all([
         supabase
           .from('contacts')
-          .select('*')
+          .select('id, itinerary_id, event_id, user_id, first_name, last_name, project_company, position, telegram_handle, email, linkedin, notes, tags, event_title, luma_event_url, date_met, last_contacted_at, created_at, updated_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false }),
         supabase
           .from('user_tags')
-          .select('*')
+          .select('id, user_id, name, created_at')
           .eq('user_id', userId)
           .order('name', { ascending: true }),
       ]);
@@ -350,7 +350,7 @@ export const useContacts = create<ContactsState>()((set, get) => ({
   fetchNotes: async (contactId: string) => {
     const { data, error } = await supabase
       .from('contact_notes')
-      .select('*')
+      .select('id, contact_id, user_id, content, created_at')
       .eq('contact_id', contactId)
       .order('created_at', { ascending: false });
 

@@ -92,7 +92,7 @@ export default function Dashboard() {
       try {
         const { data: trustData } = await supabase
           .from('trust_scores')
-          .select('*')
+          .select('user_id, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, total_handshakes, trust_level, updated_at')
           .eq('user_id', user.id)
           .single();
 
@@ -102,7 +102,7 @@ export default function Dashboard() {
 
         const { data: pointsData } = await supabase
           .from('user_points')
-          .select('*')
+          .select('id, points, reason, created_at, handshake_id')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(20);
