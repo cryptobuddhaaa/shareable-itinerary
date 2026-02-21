@@ -25,6 +25,26 @@ import {
 import type { WalletName } from '@solana/wallet-adapter-base';
 import type { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 
+// Visible debug log for in-app browsers where console isn't accessible.
+// Creates a small overlay div and appends timestamped messages.
+function debugLog(msg: string): void {
+  console.log('[SolflareInApp]', msg);
+  if (typeof document === 'undefined') return;
+  let el = document.getElementById('__sfdbg');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '__sfdbg';
+    el.style.cssText =
+      'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow-y:auto;' +
+      'background:rgba(0,0,0,0.9);color:#0f0;font:11px/1.4 monospace;padding:8px;z-index:999999;' +
+      'pointer-events:auto;white-space:pre-wrap;';
+    document.body.appendChild(el);
+  }
+  const ts = new Date().toISOString().slice(11, 23);
+  el.textContent += `${ts} ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
 interface SolflareProvider {
   isSolflare?: boolean;
   isConnected: boolean;
@@ -117,16 +137,36 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
   async connect(): Promise<void> {
     if (this.connected || this._connecting) return;
 
-    console.log('[SolflareInApp] connect() called');
+    debugLog('connect() called');
+
+    // Dump all window keys that look wallet-related for diagnostics
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as Record<string, unknown>;
+      const keys = Object.keys(w).filter(k =>
+        /solflare|phantom|wallet|solana/i.test(k)
+      );
+      debugLog('Wallet-related window keys: ' + (keys.length ? keys.join(', ') : '(none)'));
+      if (w.solflare) {
+        const sf = w.solflare as Record<string, unknown>;
+        debugLog('window.solflare keys: ' + Object.keys(sf).slice(0, 20).join(', '));
+        debugLog(`window.solflare.isSolflare=${sf.isSolflare}`);
+        debugLog(`window.solflare.isConnected=${sf.isConnected}`);
+        debugLog(`window.solflare.publicKey=${sf.publicKey ?? 'null'}`);
+        debugLog(`typeof window.solflare.connect=${typeof sf.connect}`);
+      }
+    }
 
     // Provider might be injected asynchronously — retry up to 2s
     let provider = getProvider();
     if (!provider) {
-      console.log('[SolflareInApp] Provider not found immediately, polling...');
+      debugLog('Provider not found immediately, polling...');
       for (let i = 0; i < 8; i++) {
         await new Promise(resolve => setTimeout(resolve, 250));
         provider = getProvider();
-        if (provider) break;
+        if (provider) {
+          debugLog(`Provider found after ${(i + 1) * 250}ms`);
+          break;
+        }
       }
     }
 
@@ -134,7 +174,7 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
     // wallet adapter framework from silently redirecting to solflare.com
     if (!provider) {
       const detectable = isProviderDetectable();
-      console.warn('[SolflareInApp] No provider found. Detectable:', detectable);
+      debugLog('NO PROVIDER FOUND. Detectable=' + detectable);
       throw new WalletConnectionError(
         detectable
           ? 'Solflare provider found but not fully initialized'
@@ -142,27 +182,29 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
       );
     }
 
-    console.log('[SolflareInApp] Provider found:', {
-      isSolflare: provider.isSolflare,
-      isConnected: provider.isConnected,
-      hasPublicKey: !!provider.publicKey,
-      publicKey: provider.publicKey?.toBase58?.() ?? null,
-    });
+    debugLog(
+      `Provider: isSolflare=${provider.isSolflare}, ` +
+      `isConnected=${provider.isConnected}, ` +
+      `hasPublicKey=${!!provider.publicKey}, ` +
+      `publicKey=${provider.publicKey?.toBase58?.() ?? 'null'}`
+    );
 
     this._connecting = true;
     try {
       // Case 1: Provider already has a public key — use it directly.
       // In Solflare's in-app browser the provider is often pre-connected.
       if (provider.publicKey) {
-        console.log('[SolflareInApp] Provider already has publicKey, using directly');
+        debugLog('Case 1: publicKey exists, skipping connect()');
       } else if (provider.isConnected) {
         // Case 2: isConnected but no publicKey — unusual, try connect() with timeout
-        console.log('[SolflareInApp] isConnected but no publicKey, calling connect()');
+        debugLog('Case 2: isConnected but no publicKey, calling connect()');
         await this._connectWithTimeout(provider, 5000);
+        debugLog('connect() resolved. publicKey=' + (provider.publicKey?.toBase58?.() ?? 'null'));
       } else {
         // Case 3: Not connected — call connect() with timeout
-        console.log('[SolflareInApp] Calling provider.connect()...');
+        debugLog('Case 3: Not connected, calling connect()');
         await this._connectWithTimeout(provider, 5000);
+        debugLog('connect() resolved. publicKey=' + (provider.publicKey?.toBase58?.() ?? 'null'));
       }
 
       this._provider = provider;
@@ -174,12 +216,12 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
         throw new Error('No public key available after connect');
       }
 
-      console.log('[SolflareInApp] Connected! publicKey:', provider.publicKey.toBase58());
+      debugLog('SUCCESS! publicKey=' + provider.publicKey.toBase58());
       this.emit('connect', provider.publicKey);
     } catch (error: unknown) {
       this._provider = null;
       const msg = (error as Error)?.message || 'Unknown error';
-      console.error('[SolflareInApp] Connect failed:', msg);
+      debugLog('FAILED: ' + msg);
       throw new WalletConnectionError(msg, error);
     } finally {
       this._connecting = false;
