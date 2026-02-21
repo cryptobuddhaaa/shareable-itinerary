@@ -42,6 +42,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
   const { confirm, dialogProps } = useConfirmDialog();
   const [tgGenerating, setTgGenerating] = useState(false);
   const [tgLoginUrl, setTgLoginUrl] = useState<string | null>(null);
+  const [tgCopied, setTgCopied] = useState(false);
 
   const wallet = getPrimaryWallet();
 
@@ -256,6 +257,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
         ) : !connected && isTelegramWebApp ? (
           <div className="text-center">
             <p className="text-slate-300 mb-4">You need to connect a wallet to claim this handshake.</p>
+            <p className="text-slate-400 text-sm mb-4">Tap Connect wallet to generate a wallet-friendly link.</p>
             {tgLoginUrl ? (
               <div className="flex flex-col gap-2 mx-auto max-w-sm">
                 <p className="text-xs text-slate-400">Long-press to select, then copy and paste in your wallet browser:</p>
@@ -278,6 +280,27 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
                     </svg>
                   </button>
                 </div>
+                <button
+                  onClick={onDone}
+                  className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+                >
+                  Go to home
+                </button>
+              </div>
+            ) : tgCopied ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center gap-1.5 text-green-400 text-sm">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Link copied! Paste it in your wallet browser.
+                </div>
+                <button
+                  onClick={onDone}
+                  className="text-blue-400 hover:text-blue-300 text-sm"
+                >
+                  Go to home
+                </button>
               </div>
             ) : (
               <button
@@ -322,7 +345,7 @@ export function HandshakeClaimPage({ handshakeId, onDone }: HandshakeClaimPagePr
                     }
 
                     if (didCopy) {
-                      toast.success('Link copied! Paste it in your wallet browser.');
+                      setTgCopied(true);
                     } else {
                       setTgLoginUrl(claimUrl);
                     }

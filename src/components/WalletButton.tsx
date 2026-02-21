@@ -229,7 +229,7 @@ export function WalletButton() {
   // Guide users to open the app URL in their wallet's in-app browser.
   const isTelegramWebApp = typeof window !== 'undefined' &&
     (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
-  if (isTelegramWebApp && !primaryWallet && !connected) {
+  if (isTelegramWebApp && !connected) {
 
     // Copy text to clipboard with fallbacks for iOS Telegram webview
     const copyToClipboard = async (text: string): Promise<boolean> => {
