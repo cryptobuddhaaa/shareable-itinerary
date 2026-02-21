@@ -60,8 +60,10 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
 
   private _provider: SolflareProvider | null = null;
   private _connecting = false;
+  // Start as Loadable (not NotDetected) so the wallet modal calls connect()
+  // instead of redirecting to the download page. Polling upgrades to Installed.
   private _readyState: WalletReadyState =
-    typeof window === 'undefined' ? WalletReadyState.Unsupported : WalletReadyState.NotDetected;
+    typeof window === 'undefined' ? WalletReadyState.Unsupported : WalletReadyState.Loadable;
 
   constructor() {
     super();
