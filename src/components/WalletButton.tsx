@@ -233,13 +233,10 @@ export function WalletButton() {
 
     // Copy text to clipboard with fallbacks for iOS Telegram webview
     const copyToClipboard = async (text: string): Promise<boolean> => {
-      // Try modern Clipboard API first
       try {
         await navigator.clipboard.writeText(text);
         return true;
       } catch { /* not available in this webview */ }
-
-      // Fallback: execCommand with temporary textarea
       try {
         const textarea = document.createElement('textarea');
         textarea.value = text;
@@ -253,11 +250,10 @@ export function WalletButton() {
         document.body.removeChild(textarea);
         if (ok) return true;
       } catch { /* execCommand not supported */ }
-
       return false;
     };
 
-    // If showing the URL for manual copy (iOS fallback)
+    // If showing the URL for manual copy (iOS fallback when clipboard fails)
     if (showLoginUrl) {
       return (
         <div className="flex flex-col gap-2 w-full max-w-sm">
@@ -287,53 +283,68 @@ export function WalletButton() {
     }
 
     return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={async () => {
-            if (generating) return;
-            setGenerating(true);
-            try {
-              const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
-              if (!response.ok) {
-                throw new Error('Failed to generate login link');
+      <>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              if (generating) return;
+              setGenerating(true);
+              try {
+                // Generate the magic login link first
+                const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+                if (!response.ok) throw new Error('Failed to generate login link');
+                const { url } = await response.json();
+
+                // Show instructions dialog, auto-copy when user taps OK
+                const ok = await confirm({
+                  title: 'Connect wallet',
+                  message:
+                    'To execute on-chain handshakes, you need to open this app in your wallet browser (Phantom or Solflare).\n\n' +
+                    'Tap OK to copy a one-time login link, then paste it into your wallet browser.',
+                  confirmLabel: 'OK',
+                });
+
+                if (!ok) return;
+
+                const didCopy = await copyToClipboard(url);
+                if (didCopy) {
+                  setCopied(true);
+                  toast.success('Link copied! Paste it in your wallet browser.');
+                  setTimeout(() => setCopied(false), 3000);
+                } else {
+                  // iOS fallback: show selectable URL input
+                  setShowLoginUrl(url);
+                }
+              } catch {
+                toast.error('Failed to generate login link. Please try again.');
+              } finally {
+                setGenerating(false);
               }
-              const { url } = await response.json();
-              const didCopy = await copyToClipboard(url);
-              if (didCopy) {
-                setCopied(true);
-                toast.success('Login link copied! Paste it in your Phantom or Solflare browser.');
-                setTimeout(() => setCopied(false), 3000);
-              } else {
-                // iOS fallback: show URL in a selectable input field
-                setShowLoginUrl(url);
-              }
-            } catch {
-              toast.error('Failed to generate login link. Please try again.');
-            } finally {
-              setGenerating(false);
-            }
-          }}
-          disabled={generating}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 rounded-md hover:bg-purple-900/60 transition-colors disabled:opacity-50"
-          title="Copy login link for wallet browser"
-          aria-label="Copy login link for wallet browser"
-        >
-          {generating ? (
-            <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-purple-400 border-t-transparent" />
-          ) : copied ? (
-            <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-            </svg>
-          )}
-          <span className="text-xs text-purple-300">
-            {generating ? 'Generating...' : copied ? 'Copied!' : 'Open in wallet browser'}
-          </span>
-        </button>
-      </div>
+            }}
+            disabled={generating}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 rounded-md hover:bg-purple-900/60 transition-colors disabled:opacity-50"
+            title="Connect wallet"
+            aria-label="Connect wallet"
+          >
+            {generating ? (
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-purple-400 border-t-transparent" />
+            ) : copied ? (
+              <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
+              </svg>
+            )}
+            <span className="text-xs text-purple-300">
+              {generating ? 'Generating...' : copied ? 'Copied!' : 'Connect wallet'}
+            </span>
+          </button>
+        </div>
+        <ConfirmDialog {...dialogProps} />
+      </>
     );
   }
 
