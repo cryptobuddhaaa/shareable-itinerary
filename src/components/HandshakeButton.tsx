@@ -12,6 +12,7 @@ import { useUserWallet } from '../hooks/useUserWallet';
 import { HANDSHAKE_FEE_SOL, POINTS_PER_HANDSHAKE } from '../lib/constants';
 import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
+import { authFetch } from '../lib/authFetch';
 import type { Contact, Handshake } from '../models/types';
 
 interface HandshakeButtonProps {
@@ -24,7 +25,11 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
   const { getPrimaryWallet } = useUserWallet();
   const { initiate, confirmTx, mint, getByContactId, getByIdentifier, getByInitiatorName, getByInitiatorEmail } = useHandshakes();
   const [loading, setLoading] = useState(false);
+  const [tgGenerating, setTgGenerating] = useState(false);
   const { confirm, dialogProps } = useConfirmDialog();
+
+  const isTelegramWebApp = typeof window !== 'undefined' &&
+    (!!(window as unknown as Record<string, unknown>).TelegramWebviewProxy || location.hash.includes('tgWebAppData'));
 
   const contactFullName = `${contact.firstName} ${contact.lastName}`;
   const existingHandshake = getByContactId(contact.id)
@@ -122,8 +127,62 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     );
   }
 
+  // In Telegram webview, prompt user to open in wallet browser instead
+  const handleTelegramConnect = async () => {
+    if (tgGenerating) return;
+    setTgGenerating(true);
+    try {
+      const response = await authFetch('/api/auth/wallet-login', { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to generate login link');
+      const { url } = await response.json();
+
+      const ok = await confirm({
+        title: 'Connect wallet',
+        message:
+          'To send a handshake, you need to open this app in your wallet browser (Phantom or Solflare).\n\n' +
+          'Tap OK to copy a one-time login link, then paste it into your wallet browser.',
+        confirmLabel: 'OK',
+      });
+      if (!ok) return;
+
+      let didCopy = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        didCopy = true;
+      } catch { /* not available */ }
+      if (!didCopy) {
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = url;
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          textarea.style.top = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          didCopy = document.execCommand('copy');
+          document.body.removeChild(textarea);
+        } catch { /* fallback failed */ }
+      }
+
+      if (didCopy) {
+        toast.success('Link copied! Paste it in your wallet browser.');
+      } else {
+        toast.error('Could not copy link. Please use the Connect wallet button in the header.');
+      }
+    } catch {
+      toast.error('Failed to generate login link. Please try again.');
+    } finally {
+      setTgGenerating(false);
+    }
+  };
+
   const handleInitiate = async () => {
     if (!wallet) {
+      if (isTelegramWebApp) {
+        await handleTelegramConnect();
+        return;
+      }
       toast.error('Connect and verify your wallet first');
       return;
     }
@@ -199,16 +258,16 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     <>
       <button
         onClick={handleInitiate}
-        disabled={loading || !wallet}
+        disabled={loading || tgGenerating || (!wallet && !isTelegramWebApp)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border transition-colors ${
-          wallet
+          wallet || isTelegramWebApp
             ? 'bg-purple-900/30 border-purple-700/50 text-purple-300 hover:bg-purple-900/50 hover:text-purple-200'
             : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
         }`}
-        title={wallet ? `Send handshake to ${contact.firstName} (${HANDSHAKE_FEE_SOL} SOL)` : 'Connect wallet first'}
+        title={wallet ? `Send handshake to ${contact.firstName} (${HANDSHAKE_FEE_SOL} SOL)` : isTelegramWebApp ? 'Open in wallet browser to send handshake' : 'Connect wallet first'}
         aria-label={`Send handshake to ${contact.firstName} ${contact.lastName}`}
       >
-        {loading ? (
+        {loading || tgGenerating ? (
           <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -219,7 +278,7 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
           </svg>
         )}
-        <span>{loading ? 'Signing...' : isStuckPending ? 'Retry' : 'Handshake'}</span>
+        <span>{loading ? 'Signing...' : tgGenerating ? 'Generating...' : isStuckPending ? 'Retry' : 'Handshake'}</span>
       </button>
       <ConfirmDialog {...dialogProps} />
     </>
