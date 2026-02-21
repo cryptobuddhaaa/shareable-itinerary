@@ -16,7 +16,6 @@ import {
   BaseMessageSignerWalletAdapter,
   WalletConnectionError,
   WalletDisconnectionError,
-  WalletName,
   WalletNotConnectedError,
   WalletNotReadyError,
   WalletReadyState,
@@ -24,6 +23,7 @@ import {
   WalletSignTransactionError,
   scopePollingDetectionStrategy,
 } from '@solana/wallet-adapter-base';
+import type { WalletName } from '@solana/wallet-adapter-base';
 import type { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 
 interface SolflareProvider {
@@ -167,7 +167,8 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
     this.emit('disconnect');
   };
 
-  private _onAccountChanged = (publicKey: PublicKey) => {
+  private _onAccountChanged = (...args: unknown[]) => {
+    const publicKey = args[0] as PublicKey;
     this.emit('connect', publicKey);
   };
 }
