@@ -117,9 +117,12 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
   async connect(): Promise<void> {
     if (this.connected || this._connecting) return;
 
+    console.log('[SolflareInApp] connect() called');
+
     // Provider might be injected asynchronously — retry up to 2s
     let provider = getProvider();
     if (!provider) {
+      console.log('[SolflareInApp] Provider not found immediately, polling...');
       for (let i = 0; i < 8; i++) {
         await new Promise(resolve => setTimeout(resolve, 250));
         provider = getProvider();
@@ -130,19 +133,36 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
     // Throw WalletConnectionError (NOT WalletNotReadyError) to prevent the
     // wallet adapter framework from silently redirecting to solflare.com
     if (!provider) {
+      const detectable = isProviderDetectable();
+      console.warn('[SolflareInApp] No provider found. Detectable:', detectable);
       throw new WalletConnectionError(
-        isProviderDetectable()
+        detectable
           ? 'Solflare provider found but not fully initialized'
           : 'Solflare provider not found. Are you in Solflare\'s browser?'
       );
     }
 
+    console.log('[SolflareInApp] Provider found:', {
+      isSolflare: provider.isSolflare,
+      isConnected: provider.isConnected,
+      hasPublicKey: !!provider.publicKey,
+      publicKey: provider.publicKey?.toBase58?.() ?? null,
+    });
+
     this._connecting = true;
     try {
-      // In Solflare's in-app browser, the provider may already be connected.
-      // Calling connect() on an already-connected provider can silently fail or hang.
-      if (!provider.isConnected) {
-        await provider.connect();
+      // Case 1: Provider already has a public key — use it directly.
+      // In Solflare's in-app browser the provider is often pre-connected.
+      if (provider.publicKey) {
+        console.log('[SolflareInApp] Provider already has publicKey, using directly');
+      } else if (provider.isConnected) {
+        // Case 2: isConnected but no publicKey — unusual, try connect() with timeout
+        console.log('[SolflareInApp] isConnected but no publicKey, calling connect()');
+        await this._connectWithTimeout(provider, 5000);
+      } else {
+        // Case 3: Not connected — call connect() with timeout
+        console.log('[SolflareInApp] Calling provider.connect()...');
+        await this._connectWithTimeout(provider, 5000);
       }
 
       this._provider = provider;
@@ -154,13 +174,26 @@ export class SolflareInAppAdapter extends BaseMessageSignerWalletAdapter {
         throw new Error('No public key available after connect');
       }
 
+      console.log('[SolflareInApp] Connected! publicKey:', provider.publicKey.toBase58());
       this.emit('connect', provider.publicKey);
     } catch (error: unknown) {
       this._provider = null;
-      throw new WalletConnectionError((error as Error)?.message, error);
+      const msg = (error as Error)?.message || 'Unknown error';
+      console.error('[SolflareInApp] Connect failed:', msg);
+      throw new WalletConnectionError(msg, error);
     } finally {
       this._connecting = false;
     }
+  }
+
+  private async _connectWithTimeout(provider: SolflareProvider, timeoutMs: number): Promise<void> {
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(
+        `Solflare connect() timed out after ${timeoutMs / 1000}s. ` +
+        `Provider state: isConnected=${provider.isConnected}, hasPublicKey=${!!provider.publicKey}`
+      )), timeoutMs)
+    );
+    await Promise.race([provider.connect(), timeout]);
   }
 
   async disconnect(): Promise<void> {

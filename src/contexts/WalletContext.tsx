@@ -55,9 +55,14 @@ export function SolanaWalletProvider({ children }: SolanaWalletProviderProps) {
   );
 
   const onError = useCallback((error: WalletError) => {
-    // Silently ignore autoConnect / silent-connect failures — the wallet adapter
-    // retries on the next user-initiated connect anyway.
     if (error instanceof WalletConnectionError) {
+      // Show Solflare-specific connection errors (e.g., timeout) so user isn't stuck
+      // on a silent "Connecting..." state. Other connection errors (autoConnect) stay silent.
+      if (error.message?.includes('Solflare') || error.message?.includes('timed out')) {
+        console.error('[Wallet] Solflare connection error:', error.message);
+        alert(`Wallet connection failed: ${error.message}`);
+        return;
+      }
       console.warn('[Wallet] Connection attempt failed:', error.message);
       return;
     }
