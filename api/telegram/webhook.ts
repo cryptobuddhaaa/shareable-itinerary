@@ -7,7 +7,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
-import { WEBHOOK_SECRET, WEBAPP_URL } from './_lib/config.js';
+import { WEBHOOK_SECRET, WEBAPP_URL, BOT_TOKEN } from './_lib/config.js';
 import { sendMessage } from './_lib/telegram.js';
 import { getState, clearState, getLinkedUserId } from './_lib/state.js';
 
@@ -98,6 +98,19 @@ async function handleTextInput(
 // --- Main handler ---
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // GET /api/telegram/webhook — diagnostic endpoint (no secrets exposed)
+  if (req.method === 'GET') {
+    const hasToken = !!BOT_TOKEN && BOT_TOKEN.length > 10;
+    return res.status(200).json({
+      status: 'ok',
+      botTokenConfigured: hasToken,
+      webhookSecretLength: WEBHOOK_SECRET.length,
+      hint: hasToken
+        ? 'Bot token is set. If bot is not responding, re-register the webhook via POST /api/telegram/setup.'
+        : 'TELEGRAM_BOT_TOKEN is NOT set in environment variables. Set it in Vercel → Settings → Environment Variables.',
+    });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -109,6 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     secretHeader.length !== WEBHOOK_SECRET.length ||
     !crypto.timingSafeEqual(Buffer.from(secretHeader), Buffer.from(WEBHOOK_SECRET))
   ) {
+    console.error('[Webhook] Secret mismatch — received length:', secretHeader?.length, 'expected:', WEBHOOK_SECRET.length);
     return res.status(403).json({ error: 'Forbidden' });
   }
 
