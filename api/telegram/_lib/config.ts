@@ -7,7 +7,7 @@ export const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 export const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 export const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-export const WEBAPP_URL = process.env.WEBAPP_URL || 'https://convenu.vercel.app';
+export const WEBAPP_URL = process.env.WEBAPP_URL || 'https://convenu.xyz';
 
 // Webhook secret derived from bot token
 export const WEBHOOK_SECRET = crypto

@@ -18,7 +18,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"https://convenu.vercel.app/api\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://convenu.xyz/api\"")
         buildConfigField("String", "SUPABASE_URL", "\"\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"\"")
         buildConfigField("String", "SOLANA_NETWORK", "\"devnet\"")

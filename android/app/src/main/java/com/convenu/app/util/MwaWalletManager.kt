@@ -41,7 +41,7 @@ class MwaWalletManager @Inject constructor() {
         return try {
             val result = mwa.transact(sender) {
                 authorize(
-                    identityUri = Uri.parse("https://convenu.vercel.app"),
+                    identityUri = Uri.parse("https://convenu.xyz"),
                     iconUri = Uri.parse("favicon.ico"),
                     identityName = "Convenu",
                 )
@@ -92,7 +92,7 @@ class MwaWalletManager @Inject constructor() {
         return try {
             val result = mwa.transact(sender) {
                 reauthorize(
-                    identityUri = Uri.parse("https://convenu.vercel.app"),
+                    identityUri = Uri.parse("https://convenu.xyz"),
                     iconUri = Uri.parse("favicon.ico"),
                     identityName = "Convenu",
                     authToken = connection.authToken,
@@ -135,7 +135,7 @@ class MwaWalletManager @Inject constructor() {
         return try {
             val result = mwa.transact(sender) {
                 reauthorize(
-                    identityUri = Uri.parse("https://convenu.vercel.app"),
+                    identityUri = Uri.parse("https://convenu.xyz"),
                     iconUri = Uri.parse("favicon.ico"),
                     identityName = "Convenu",
                     authToken = connection.authToken,
