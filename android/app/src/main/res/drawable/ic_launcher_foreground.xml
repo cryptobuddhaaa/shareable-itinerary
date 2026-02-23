@@ -4,8 +4,54 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Purple "C" shape for Convenu -->
+    <!-- Convenu logo: two-figure handshake icon (white strokes) -->
+    <!-- Original SVG viewBox 200x140 scaled by 0.36, offset (18, 28.8) to center in safe zone -->
+
+    <!-- Left figure head -->
     <path
-        android:fillColor="#7C3AED"
-        android:pathData="M54,27 C39.1,27 27,39.1 27,54 C27,68.9 39.1,81 54,81 C61.5,81 68.3,77.9 73.1,73.1 L67.4,67.4 C63.8,71 58.7,73.2 54,73.2 C43.4,73.2 34.8,64.6 34.8,54 C34.8,43.4 43.4,34.8 54,34.8 C58.7,34.8 63.8,37 67.4,40.6 L73.1,34.9 C68.3,30.1 61.5,27 54,27 Z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.98"
+        android:strokeLineCap="round"
+        android:pathData="M43.02,41.76 A1.98,1.98,0,1,0,46.98,41.76 A1.98,1.98,0,1,0,43.02,41.76 Z" />
+
+    <!-- Right figure head -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.98"
+        android:strokeLineCap="round"
+        android:pathData="M61.02,40.68 A1.98,1.98,0,1,0,64.98,40.68 A1.98,1.98,0,1,0,61.02,40.68 Z" />
+
+    <!-- Left figure arm reaching right -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.98"
+        android:strokeLineCap="round"
+        android:pathData="M39.6,48.96 Q46.08,46.08 54,48.24" />
+
+    <!-- Left figure lower body arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.98"
+        android:strokeLineCap="round"
+        android:pathData="M32.4,60.48 Q36.72,53.28 42.48,48.96" />
+
+    <!-- Right figure arm/shoulder -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.98"
+        android:strokeLineCap="round"
+        android:pathData="M56.88,47.52 Q61.92,45 67.68,46.8" />
+
+    <!-- Right figure lower body arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.98"
+        android:strokeLineCap="round"
+        android:pathData="M67.68,46.8 Q71.28,51.12 74.88,60.48" />
 </vector>

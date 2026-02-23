@@ -1,21 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <!-- Dark background -->
   <rect width="64" height="64" rx="12" fill="#0f172a"/>
-  <!-- Two-figure handshake icon (matching Convenu logo) -->
-  <g stroke="white" stroke-width="2.2" stroke-linecap="round" fill="none">
-    <!-- Left figure head -->
-    <circle cx="22" cy="18" r="3"/>
-    <!-- Right figure head -->
-    <circle cx="42" cy="17" r="3"/>
-    <!-- Left figure arm reaching right -->
-    <path d="M16 28 Q22 24 32 27"/>
-    <!-- Left figure body arc -->
-    <path d="M10 42 Q14 34 20 28"/>
-    <!-- Right figure arm reaching left -->
-    <path d="M34 26 Q40 22 48 25"/>
-    <!-- Right figure body arc -->
-    <path d="M48 25 Q52 32 54 42"/>
-    <!-- Hands clasping at center -->
-    <path d="M30 27 Q32 25 34 27"/>
+  <!-- Convenu logo scaled to fit 64x64 (original viewBox 200x140) -->
+  <g stroke="white" stroke-width="1.8" stroke-linecap="round" fill="none" transform="translate(2, 11) scale(0.3)">
+    <circle cx="75" cy="36" r="5.5"/>
+    <circle cx="125" cy="33" r="5.5"/>
+    <path d="M60 56 Q78 48 100 54"/>
+    <path d="M40 88 Q52 68 68 56"/>
+    <path d="M108 52 Q122 45 138 50"/>
+    <path d="M138 50 Q148 62 158 88"/>
   </g>
 </svg>
