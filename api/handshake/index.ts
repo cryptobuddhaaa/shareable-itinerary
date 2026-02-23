@@ -416,6 +416,15 @@ async function handleConfirmTx(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Handshake not found' });
     }
 
+    // Validate handshake is in the right status for this side's payment
+    const validStatuses = side === 'initiator' ? ['pending'] : ['claimed'];
+    if (!validStatuses.includes(handshake.status)) {
+      return res.status(409).json({
+        error: `Cannot confirm ${side} transaction: handshake is already ${handshake.status}`,
+        status: handshake.status,
+      });
+    }
+
     // Verify the authenticated user matches the claimed side
     if (side === 'initiator' && handshake.initiator_user_id !== authUser.id) {
       return res.status(403).json({ error: 'Not authorized for this handshake' });

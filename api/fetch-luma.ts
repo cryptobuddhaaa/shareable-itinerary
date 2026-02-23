@@ -46,8 +46,8 @@ export default async function handler(
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({
-        error: `Failed to fetch: ${response.statusText}`
+      return res.status(502).json({
+        error: 'Failed to fetch event data from Luma'
       });
     }
 

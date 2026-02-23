@@ -17,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authUser) return;
     const { code } = req.body;
 
-    if (!code) {
+    if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Authorization code is required' });
     }
 

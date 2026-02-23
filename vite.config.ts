@@ -46,6 +46,14 @@ function vercelApiPlugin(): Plugin {
             (req as unknown as Record<string, unknown>).body = bodyStr ? JSON.parse(bodyStr) : {};
           }
 
+          // Parse query string into req.query for Vercel compatibility
+          const queryString = req.url?.split('?')[1] || '';
+          const query: Record<string, string> = {};
+          for (const [key, value] of new URLSearchParams(queryString)) {
+            query[key] = value;
+          }
+          (req as unknown as Record<string, unknown>).query = query;
+
           // Create a minimal Vercel-compatible response wrapper
           const vercelRes = {
             _statusCode: 200,
@@ -55,6 +63,14 @@ function vercelApiPlugin(): Plugin {
             json(data: unknown) {
               res.writeHead(this._statusCode, { 'Content-Type': 'application/json', ...this._headers });
               res.end(JSON.stringify(data));
+            },
+            redirect(url: string) {
+              res.writeHead(302, { Location: url, ...this._headers });
+              res.end();
+            },
+            send(body: string) {
+              res.writeHead(this._statusCode, { 'Content-Type': 'text/html', ...this._headers });
+              res.end(body);
             },
           };
 

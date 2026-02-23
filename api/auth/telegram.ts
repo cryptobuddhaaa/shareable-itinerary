@@ -52,7 +52,10 @@ function verifyInitData(initData: string): { valid: boolean; user?: TelegramWebA
     .update(dataCheckString)
     .digest('hex');
 
-  if (computed !== hash) {
+  if (
+    computed.length !== hash.length ||
+    !crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(hash))
+  ) {
     return { valid: false };
   }
 

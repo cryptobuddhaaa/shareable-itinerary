@@ -112,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authUser) return;
     const { accessToken, timeMin, timeMax } = req.body;
 
-    if (!accessToken) {
+    if (!accessToken || typeof accessToken !== 'string') {
       return res.status(400).json({ error: 'Access token is required' });
     }
 
