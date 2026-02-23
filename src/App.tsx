@@ -37,6 +37,14 @@ function App() {
   const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<Itinerary | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
 
+  // Auto-switch to profile tab when redirected from X OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('x_verified') || params.has('x_error')) {
+      setActiveTab('profile');
+    }
+  }, []);
+
   const itinerary = currentItinerary();
 
   // Badge counts: pending handshakes where the current user is the receiver
