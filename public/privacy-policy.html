@@ -39,8 +39,9 @@
     <ul>
       <li><strong>Account Information:</strong> When you sign in via Google OAuth, we receive your name, email address, and profile avatar. When you sign in via Telegram, we receive your Telegram user ID, first and last name, username, language preference, and premium status.</li>
       <li><strong>Itinerary Data:</strong> Trip names, descriptions, event details (titles, dates, times, locations, coordinates), transit information, and trip metrics you create within the app.</li>
-      <li><strong>Contact Data:</strong> Names, companies, positions, Telegram handles, email addresses, LinkedIn URLs, notes, and tags of contacts you add to your CRM.</li>
+      <li><strong>Contact Data:</strong> Names, companies, positions, Telegram handles, email addresses, LinkedIn URLs, notes, and tags of contacts you add to your CRM. You may also add timestamped notes to individual contacts.</li>
       <li><strong>Wallet Information:</strong> Your Solana wallet public address when you connect a wallet (e.g., Phantom, Solflare) to the Service.</li>
+      <li><strong>Telegram Bot Interactions:</strong> If you interact with the Convenu Telegram bot (@convenubot), we process commands and conversational state to provide bot features (creating contacts, itineraries, events). If you forward a Telegram message to the bot, the sender's name and username may be used to create or update a contact. Conversational state is temporary and deleted when you unlink your account.</li>
     </ul>
 
     <h3>2.2 Information Collected Automatically</h3>
@@ -51,7 +52,8 @@
 
     <h3>2.3 Information from Third Parties</h3>
     <ul>
-      <li><strong>Google Calendar:</strong> If you choose to import events, we access your Google Calendar data in read-only mode. This data is used solely to populate itinerary events and is not stored on our servers beyond the itinerary records you create.</li>
+      <li><strong>Google Calendar:</strong> If you choose to import events, we access your Google Calendar data in read-only mode (scope: <code>calendar.readonly</code>). This data is used solely to populate itinerary events and is not stored on our servers beyond the itinerary records you create. Your Google Calendar access token is stored only in your browser session and is not persisted server-side.</li>
+      <li><strong>Luma Events:</strong> If you provide a Luma (lu.ma) event URL, we fetch publicly available event details (title, date, location, description) from that URL to populate your itinerary. No Luma account credentials are accessed.</li>
       <li><strong>Telegram:</strong> Profile information provided through Telegram Mini App authentication, verified using HMAC-SHA256.</li>
     </ul>
 
@@ -69,9 +71,11 @@
       <li>Create and maintain your account.</li>
       <li>Provide core features: itinerary planning, contact management, itinerary sharing, and Proof of Handshake verification.</li>
       <li>Mint compressed NFTs (cNFTs) on the Solana blockchain as verifiable records of completed handshakes.</li>
-      <li>Calculate trust scores based on your Telegram profile signals and handshake history.</li>
+      <li>Calculate trust scores based on Telegram profile signals (premium status, profile photo, username, account age), wallet verification status, and handshake history.</li>
       <li>Award points for completed handshakes.</li>
       <li>Communicate with you regarding your account or the Service (e.g., magic link emails).</li>
+      <li>Enable data portability features, including CSV export of contacts and PDF/print export of itineraries.</li>
+      <li>Facilitate the Telegram bot for creating and managing contacts, itineraries, and events via chat commands.</li>
       <li>Enforce our Terms of Use and protect against misuse.</li>
     </ul>
 
@@ -93,7 +97,8 @@
       <tr><th>Provider</th><th>Purpose</th><th>Data Shared</th></tr>
       <tr><td>Supabase</td><td>Database and authentication</td><td>Account data, itineraries, contacts, handshake records</td></tr>
       <tr><td>Vercel</td><td>Hosting and serverless functions</td><td>Request metadata</td></tr>
-      <tr><td>Helius / QuikNode / Triton</td><td>Solana RPC providers</td><td>Wallet addresses, transaction data</td></tr>
+      <tr><td>Helius / QuikNode / Triton</td><td>Solana RPC providers</td><td>Wallet addresses, transaction data, IP addresses</td></tr>
+      <tr><td>Luma (lu.ma)</td><td>Event data import</td><td>Event URLs (server-side fetch only)</td></tr>
       <tr><td>Google OAuth</td><td>Authentication</td><td>OAuth tokens (email, name, avatar)</td></tr>
       <tr><td>Telegram API</td><td>Authentication and bot features</td><td>Telegram user ID and profile data</td></tr>
     </table>
@@ -129,6 +134,7 @@
       <li><strong>Account data:</strong> Retained for as long as your account is active.</li>
       <li><strong>Itineraries and contacts:</strong> Retained until you delete them or delete your account.</li>
       <li><strong>Handshake records:</strong> Pending handshakes expire after 7 days. Completed handshake database records are retained; corresponding blockchain records are permanent.</li>
+      <li><strong>Telegram bot state:</strong> Temporary conversational state is automatically deleted when you unlink your Telegram account. Link codes expire after 10 minutes.</li>
       <li><strong>Blockchain data:</strong> Permanent and immutable. Cannot be deleted.</li>
     </ul>
 
