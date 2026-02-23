@@ -19,8 +19,6 @@ const supabase = createClient(
 const MAX_HANDSHAKES = 30;
 const MAX_WALLET = 20;
 const MAX_SOCIALS = 20;
-const MAX_EVENTS = 20;
-const MAX_COMMUNITY = 10;
 
 export function computeTrustCategories(signals: {
   totalHandshakes: number;

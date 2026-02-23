@@ -150,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=token_exchange`);
       }
 
-      const tokenData = await tokenRes.json();
+      const tokenData = await tokenRes.json() as { access_token: string };
       const accessToken = tokenData.access_token;
 
       // Fetch X user info
@@ -163,7 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=user_fetch`);
       }
 
-      const userData = await userRes.json();
+      const userData = await userRes.json() as { data?: { username?: string } };
       const xUsername = userData.data?.username;
 
       const userId = payload.userId as string;

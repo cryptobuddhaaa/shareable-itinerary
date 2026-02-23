@@ -48,12 +48,7 @@ export async function handleTrust(chatId: number, telegramUserId: number) {
 
   const { data: trust } = await supabase
     .from('trust_scores')
-    .select(
-      'trust_score, trust_level, score_handshakes, score_wallet, score_socials, score_events, score_community, ' +
-      'telegram_premium, has_profile_photo, has_username, telegram_account_age_days, ' +
-      'wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, ' +
-      'x_verified, total_handshakes'
-    )
+    .select('trust_score, trust_level, score_handshakes, score_wallet, score_socials, score_events, score_community, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, x_verified, total_handshakes')
     .eq('user_id', userId)
     .single();
 
