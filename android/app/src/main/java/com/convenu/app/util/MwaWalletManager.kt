@@ -2,6 +2,7 @@ package com.convenu.app.util
 
 import android.net.Uri
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
+import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import com.solana.mobilewalletadapter.clientlib.TransactionResult
 import timber.log.Timber
@@ -32,19 +33,21 @@ sealed class WalletResult<out T> {
 @Singleton
 class MwaWalletManager @Inject constructor() {
 
-    private val mwa = MobileWalletAdapter()
+    private val mwa = MobileWalletAdapter(
+        connectionIdentity = ConnectionIdentity(
+            identityUri = Uri.parse("https://app.convenu.xyz"),
+            iconUri = Uri.parse("favicon.ico"),
+            identityName = "Convenu",
+        ),
+    )
 
     var currentConnection: WalletConnection? = null
         private set
 
     suspend fun authorize(sender: ActivityResultSender): WalletResult<WalletConnection> {
         return try {
-            val result = mwa.transact(sender) {
-                authorize(
-                    identityUri = Uri.parse("https://app.convenu.xyz"),
-                    iconUri = Uri.parse("favicon.ico"),
-                    identityName = "Convenu",
-                )
+            val result = mwa.transact(sender) { authResult ->
+                authResult
             }
 
             when (result) {
@@ -73,7 +76,7 @@ class MwaWalletManager @Inject constructor() {
 
                 is TransactionResult.Failure -> {
                     Timber.e("MWA authorize failed: ${result.message}")
-                    WalletResult.Error(result.message ?: "Authorization failed")
+                    WalletResult.Error(result.message)
                 }
             }
         } catch (e: Exception) {
@@ -90,14 +93,8 @@ class MwaWalletManager @Inject constructor() {
             ?: return WalletResult.Error("Wallet not connected")
 
         return try {
-            val result = mwa.transact(sender) {
-                reauthorize(
-                    identityUri = Uri.parse("https://app.convenu.xyz"),
-                    iconUri = Uri.parse("favicon.ico"),
-                    identityName = "Convenu",
-                    authToken = connection.authToken,
-                )
-                signMessages(
+            val result = mwa.transact(sender) { _ ->
+                signMessagesDetached(
                     messages = arrayOf(message),
                     addresses = arrayOf(connection.publicKey),
                 )
@@ -105,9 +102,9 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    val signatures = result.payload.messages
-                    if (signatures.isNotEmpty() && signatures[0].signatures.isNotEmpty()) {
-                        WalletResult.Success(signatures[0].signatures[0])
+                    val signResult = result.payload
+                    if (signResult.messages.isNotEmpty() && signResult.messages[0].signatures.isNotEmpty()) {
+                        WalletResult.Success(signResult.messages[0].signatures[0])
                     } else {
                         WalletResult.Error("No signature returned")
                     }
@@ -116,7 +113,7 @@ class MwaWalletManager @Inject constructor() {
                 is TransactionResult.NoWalletFound -> WalletResult.NoWallet
                 is TransactionResult.Failure -> {
                     Timber.e("MWA signMessage failed: ${result.message}")
-                    WalletResult.Error(result.message ?: "Signing failed")
+                    WalletResult.Error(result.message)
                 }
             }
         } catch (e: Exception) {
@@ -133,13 +130,7 @@ class MwaWalletManager @Inject constructor() {
             ?: return WalletResult.Error("Wallet not connected")
 
         return try {
-            val result = mwa.transact(sender) {
-                reauthorize(
-                    identityUri = Uri.parse("https://app.convenu.xyz"),
-                    iconUri = Uri.parse("favicon.ico"),
-                    identityName = "Convenu",
-                    authToken = connection.authToken,
-                )
+            val result = mwa.transact(sender) { _ ->
                 signTransactions(transactions = transactions)
             }
 
@@ -151,7 +142,7 @@ class MwaWalletManager @Inject constructor() {
                 is TransactionResult.NoWalletFound -> WalletResult.NoWallet
                 is TransactionResult.Failure -> {
                     Timber.e("MWA signTransactions failed: ${result.message}")
-                    WalletResult.Error(result.message ?: "Transaction signing failed")
+                    WalletResult.Error(result.message)
                 }
             }
         } catch (e: Exception) {
