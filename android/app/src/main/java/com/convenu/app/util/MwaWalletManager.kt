@@ -59,7 +59,7 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    val authResult = result.successPayload
+                    val authResult = result.payload
                     val publicKey = authResult.accounts.firstOrNull()?.publicKey
                     val authToken = authResult.authToken
 
@@ -112,7 +112,7 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    val (pubkeyBytes, signatureBytes) = result.successPayload
+                    val (pubkeyBytes, signatureBytes) = result.payload
                     val walletAddress = Base58.encode(pubkeyBytes)
                     val signatureBase58 = Base58.encode(signatureBytes)
 
@@ -168,7 +168,7 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    val signResult = result.successPayload
+                    val signResult = result.payload
                     if (signResult.messages.isNotEmpty() && signResult.messages[0].signatures.isNotEmpty()) {
                         WalletResult.Success(signResult.messages[0].signatures[0])
                     } else {
@@ -203,7 +203,7 @@ class MwaWalletManager @Inject constructor() {
 
             when (result) {
                 is TransactionResult.Success -> {
-                    WalletResult.Success(result.successPayload.signedPayloads)
+                    WalletResult.Success(result.payload.signedPayloads)
                 }
 
                 is TransactionResult.NoWalletFound -> WalletResult.NoWallet
