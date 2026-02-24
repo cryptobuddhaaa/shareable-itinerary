@@ -3,13 +3,16 @@
 import { supabase, WEBAPP_URL } from '../_lib/config.js';
 import { sendMessage } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
+import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
+import { computeTrustCategories } from '../../trust/compute.js';
+import { mergeAccounts } from '../../_lib/account-merge.js';
 
 export async function handleStart(
   chatId: number,
   telegramUserId: number,
   telegramUsername: string | undefined,
   args: string,
-  telegramUser?: { is_premium?: boolean; has_profile_photo?: boolean }
+  telegramUser?: { is_premium?: boolean }
 ) {
   if (!args) {
     const linked = await getLinkedUserId(telegramUserId);
@@ -86,12 +89,32 @@ export async function handleStart(
     .single();
 
   if (existingLink && existingLink.user_id !== linkCode.user_id) {
-    await sendMessage(
-      chatId,
-      '❌ This Telegram account is already linked to a different account.\n\n' +
-        'You must unlink it from the other account first (web app → Contacts → Unlink Telegram).'
-    );
-    return;
+    // Check if the existing linked user is a synthetic Telegram-only account
+    // (auto-created by Mini App login). If so, allow re-linking to the real account.
+    const { data: existingUser } = await supabase.auth.admin.getUserById(existingLink.user_id);
+    const existingEmail = existingUser?.user?.email || '';
+    const isSyntheticAccount = existingEmail.startsWith('tg_') && existingEmail.endsWith('@tg.convenu.app');
+
+    if (!isSyntheticAccount) {
+      await sendMessage(
+        chatId,
+        '❌ This Telegram account is already linked to a different account.\n\n' +
+          'You must unlink it from the other account first (web app → Contacts → Unlink Telegram).'
+      );
+      return;
+    }
+
+    // Synthetic account — merge all its data into the real account, then delete it.
+    // mergeAccounts() handles: itineraries, contacts, handshakes, trust scores,
+    // user profiles, wallets, points, tags, subscriptions, AI data, and deletes
+    // the synthetic auth user + its telegram_links entry.
+    try {
+      await mergeAccounts(existingLink.user_id, linkCode.user_id);
+    } catch (mergeErr) {
+      console.error('[account] Merge failed:', mergeErr);
+      // Non-fatal: link will still be re-created below.
+      // Worst case: some data stays orphaned on the deleted synthetic account.
+    }
   }
 
   // UNIQUENESS CHECK: Ensure the target user doesn't already have a different Telegram linked
@@ -124,14 +147,59 @@ export async function handleStart(
     .update({ used: true })
     .eq('code', code);
 
-  // Store trust signals from Telegram user profile
+  // Store trust signals from Telegram user profile and compute trust score (0-100)
   if (telegramUser) {
+    const { data: existing } = await supabase
+      .from('trust_scores')
+      .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, x_premium')
+      .eq('user_id', linkCode.user_id)
+      .single();
+
+    const telegramPremium = telegramUser.is_premium || false;
+    const hasUsername = !!telegramUsername;
+    const walletConnected = existing?.wallet_connected || false;
+    const totalHandshakes = existing?.total_handshakes || 0;
+    const accountAgeDays = existing?.telegram_account_age_days
+      ?? estimateTelegramAccountAgeDays(telegramUserId);
+    const walletAgeDays = existing?.wallet_age_days ?? null;
+    const walletTxCount = existing?.wallet_tx_count ?? null;
+    const walletHasTokens = existing?.wallet_has_tokens || false;
+    const xVerified = existing?.x_verified || false;
+    const xPremium = existing?.x_premium || false;
+
+    const scores = computeTrustCategories({
+      totalHandshakes,
+      walletConnected,
+      walletAgeDays,
+      walletTxCount,
+      walletHasTokens,
+      telegramPremium,
+      hasUsername,
+      telegramAccountAgeDays: accountAgeDays,
+      xVerified,
+      xPremium,
+    });
+
     await supabase.from('trust_scores').upsert(
       {
         user_id: linkCode.user_id,
-        telegram_premium: telegramUser.is_premium || false,
-        has_profile_photo: !!telegramUser.has_profile_photo,
-        has_username: !!telegramUsername,
+        telegram_premium: telegramPremium,
+        has_username: hasUsername,
+        telegram_account_age_days: accountAgeDays,
+        wallet_connected: walletConnected,
+        wallet_age_days: walletAgeDays,
+        wallet_tx_count: walletTxCount,
+        wallet_has_tokens: walletHasTokens,
+        x_verified: xVerified,
+        x_premium: xPremium,
+        total_handshakes: totalHandshakes,
+        trust_score: scores.trustScore,
+        score_handshakes: scores.scoreHandshakes,
+        score_wallet: scores.scoreWallet,
+        score_socials: scores.scoreSocials,
+        score_events: scores.scoreEvents,
+        score_community: scores.scoreCommunity,
+        trust_level: scores.trustLevel,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' }

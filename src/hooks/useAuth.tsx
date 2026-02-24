@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const { token_hash } = await response.json();
+          const { token_hash, new_account } = await response.json();
 
 
           // Verify the OTP token to establish a real Supabase session
@@ -148,6 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!cancelled && otpData?.session) {
               setSession(otpData.session);
               setUser(otpData.session.user);
+
+              // Hint: if this is a brand-new synthetic account, the user might
+              // already have a Google/email account they should link to.
+              if (new_account) {
+                toast.info(
+                  'Already have an account? Link your Telegram from the web app \u2192 Contacts \u2192 Link Telegram to merge your data.'
+                );
+              }
             }
           }
         } catch (err) {
@@ -225,7 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { token_hash } = await response.json();
+      const { token_hash, new_account: newAcct } = await response.json();
 
       const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
         token_hash,
@@ -242,6 +250,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (otpData?.session) {
           setSession(otpData.session);
           setUser(otpData.session.user);
+
+          if (newAcct) {
+            toast.info(
+              'Already have an account? Link your Telegram from the web app \u2192 Contacts \u2192 Link Telegram to merge your data.'
+            );
+          }
         }
       }
     } catch (err) {

@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { requireAuth } from '../_lib/auth.js';
+import { recomputeFromStored } from '../_lib/trust-recompute.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -32,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Verify the signature
     const { PublicKey } = await import('@solana/web3.js');
-    const publicKey = new PublicKey(walletAddress);
+    const publicKey = new PublicKey(walletAddress); // already validated above
     const messageBytes = new TextEncoder().encode(message);
     const signatureBytes = bs58.decode(signature);
 
@@ -46,15 +47,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid signature', verified: false });
     }
 
-    // Verify the message contains a recent timestamp — reject if missing or expired
+    // Verify the message contains a recent timestamp — reject if missing, expired, or in the future
     const timestampMatch = message.match(/Timestamp: (\d+)/);
     if (!timestampMatch) {
       return res.status(400).json({ error: 'Message must contain a timestamp', verified: false });
     }
     const timestamp = parseInt(timestampMatch[1], 10);
+    const now = Date.now();
     const fiveMinutes = 5 * 60 * 1000;
-    if (Date.now() - timestamp > fiveMinutes) {
+    if (timestamp > now + 30_000) {
+      return res.status(400).json({ error: 'Timestamp is in the future', verified: false });
+    }
+    if (now - timestamp > fiveMinutes) {
       return res.status(400).json({ error: 'Signature expired', verified: false });
+    }
+
+    // Validate walletAddress is a valid base58 Solana public key (32 bytes)
+    try {
+      const { PublicKey: PK } = await import('@solana/web3.js');
+      new PK(walletAddress); // throws if invalid
+    } catch {
+      return res.status(400).json({ error: 'Invalid wallet address', verified: false });
+    }
+
+    // Validate walletId is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (typeof walletId !== 'string' || !uuidRegex.test(walletId)) {
+      return res.status(400).json({ error: 'Invalid wallet ID', verified: false });
     }
 
     // Check the wallet row exists and matches the address
@@ -133,6 +152,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         wallet_connected: true,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
+
+    // Recompute trust score so it reflects wallet_connected immediately
+    await recomputeFromStored(authUser.id);
 
     return res.status(200).json({ verified: true });
   } catch (error) {

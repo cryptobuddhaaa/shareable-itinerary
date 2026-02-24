@@ -144,7 +144,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const args = text.substring('/start'.length).trim();
         await handleStart(chatId, telegramUserId, telegramUsername, args, {
           is_premium: msg.from.is_premium,
-          has_profile_photo: msg.from.has_profile_photo,
         });
       } else if (text === '/newcontact') {
         await handleNewContact(chatId, telegramUserId);

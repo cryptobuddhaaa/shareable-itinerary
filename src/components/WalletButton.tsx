@@ -226,10 +226,11 @@ export function WalletButton() {
     );
   }
 
-  // Detect Telegram WebApp — wallets can't connect in Telegram's webview.
-  // Guide users to open the app URL in their wallet's in-app browser.
-  const isTelegramWebApp = checkTelegramWebApp();
-  if (isTelegramWebApp && !connected) {
+  // Detect mobile browsers and Telegram WebApp — wallet adapter modals don't work
+  // in mobile browsers (no extension) or Telegram's webview.
+  // Guide users to copy a magic link and paste it into their wallet's in-app browser.
+  const isMobile = checkTelegramWebApp() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile && !connected) {
 
     // Copy text to clipboard with fallbacks for iOS Telegram webview
     const copyToClipboard = async (text: string): Promise<boolean> => {

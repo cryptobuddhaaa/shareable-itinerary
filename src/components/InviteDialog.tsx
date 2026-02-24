@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import { useItinerary } from '../hooks/useItinerary';
 import { toast } from './Toast';
@@ -11,7 +11,58 @@ interface InviteDialogProps {
 
 type Step = 'select' | 'compose' | 'send';
 
-const DEFAULT_TEMPLATE = `Hey {firstName}! It was great meeting you{eventMention}. Would love to stay in touch — let me know if you're up for a quick chat sometime!`;
+// --- Pre-set templates ---
+interface MessageTemplate {
+  id: string;
+  name: string;
+  body: string;
+  builtin: boolean;
+}
+
+const BUILTIN_TEMPLATES: MessageTemplate[] = [
+  {
+    id: 'follow-up',
+    name: 'Follow-up',
+    body: `Hey {firstName}! It was great meeting you{eventMention}. Would love to stay in touch \u2014 let me know if you\u2019re up for a quick chat sometime!`,
+    builtin: true,
+  },
+  {
+    id: 'convenu-invite',
+    name: 'Convenu Invite',
+    body: `Hey {firstName}! Great connecting with you{eventMention}. I\u2019m using @convenubot to keep track of people I meet at events \u2014 and it lets us mint an on-chain Proof of Handshake as a soulbound NFT on Solana. Try it out and claim our handshake: https://t.me/convenubot`,
+    builtin: true,
+  },
+  {
+    id: 'quick-hello',
+    name: 'Quick Hello',
+    body: `Hi {firstName}! Just wanted to say it was nice meeting you{eventMention}. Hope to cross paths again soon!`,
+    builtin: true,
+  },
+  {
+    id: 'collab',
+    name: 'Collaboration',
+    body: `Hey {firstName}! Enjoyed our conversation{eventMention}. I think there could be some cool synergies between what you\u2019re building at {company} and what I\u2019m working on. Would you be open to a quick call this week?`,
+    builtin: true,
+  },
+];
+
+const CUSTOM_TEMPLATES_KEY = 'convenu_custom_templates';
+const MAX_CUSTOM_TEMPLATES = 3;
+
+function loadCustomTemplates(): MessageTemplate[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as MessageTemplate[];
+    return parsed.slice(0, MAX_CUSTOM_TEMPLATES);
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomTemplates(templates: MessageTemplate[]) {
+  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(templates.slice(0, MAX_CUSTOM_TEMPLATES)));
+}
 
 function personalizeMessage(template: string, contact: Contact): string {
   const eventMention = contact.eventTitle ? ` at ${contact.eventTitle}` : '';
@@ -31,8 +82,18 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
   const [step, setStep] = useState<Step>('select');
   const [filterItineraryId, setFilterItineraryId] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
+  const [template, setTemplate] = useState(BUILTIN_TEMPLATES[0].body);
+  const [activeTemplateId, setActiveTemplateId] = useState<string>(BUILTIN_TEMPLATES[0].id);
   const [sendIndex, setSendIndex] = useState(0);
+
+  // Custom template management
+  const [customTemplates, setCustomTemplates] = useState<MessageTemplate[]>(loadCustomTemplates);
+  const [editingCustom, setEditingCustom] = useState<{ name: string; body: string } | null>(null);
+
+  const allTemplates = useMemo(
+    () => [...BUILTIN_TEMPLATES, ...customTemplates],
+    [customTemplates]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -70,6 +131,46 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(eligibleContacts.map((c) => c.id)));
+    }
+  };
+
+  const selectTemplate = useCallback((t: MessageTemplate) => {
+    setActiveTemplateId(t.id);
+    setTemplate(t.body);
+  }, []);
+
+  const handleSaveCustomTemplate = () => {
+    if (!editingCustom) return;
+    const name = editingCustom.name.trim();
+    const body = editingCustom.body.trim();
+    if (!name || !body) {
+      toast.error('Template name and message are required.');
+      return;
+    }
+    if (customTemplates.length >= MAX_CUSTOM_TEMPLATES) {
+      toast.error(`You can save up to ${MAX_CUSTOM_TEMPLATES} custom templates.`);
+      return;
+    }
+    const newTemplate: MessageTemplate = {
+      id: `custom-${Date.now()}`,
+      name,
+      body,
+      builtin: false,
+    };
+    const updated = [...customTemplates, newTemplate];
+    setCustomTemplates(updated);
+    saveCustomTemplates(updated);
+    setEditingCustom(null);
+    selectTemplate(newTemplate);
+    toast.success('Template saved');
+  };
+
+  const handleDeleteCustomTemplate = (id: string) => {
+    const updated = customTemplates.filter((t) => t.id !== id);
+    setCustomTemplates(updated);
+    saveCustomTemplates(updated);
+    if (activeTemplateId === id) {
+      selectTemplate(BUILTIN_TEMPLATES[0]);
     }
   };
 
@@ -213,8 +314,90 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
 
           {step === 'compose' && (
             <div>
-              <p className="text-sm text-slate-400 mb-3">
-                Write your message template. Available variables:
+              {/* Template selector */}
+              <label className="block text-sm text-slate-400 mb-2">Choose a template</label>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {allTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => selectTemplate(t)}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                      activeTemplateId === t.id
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {t.name}
+                    {!t.builtin && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCustomTemplate(t.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            handleDeleteCustomTemplate(t.id);
+                          }
+                        }}
+                        className="ml-1.5 text-slate-400 hover:text-red-400"
+                        title="Delete custom template"
+                      >
+                        &times;
+                      </span>
+                    )}
+                  </button>
+                ))}
+                {customTemplates.length < MAX_CUSTOM_TEMPLATES && !editingCustom && (
+                  <button
+                    onClick={() => setEditingCustom({ name: '', body: '' })}
+                    className="px-2.5 py-1 text-xs rounded-full border border-dashed border-slate-500 text-slate-400 hover:text-blue-400 hover:border-blue-500 transition-colors"
+                  >
+                    + Custom
+                  </button>
+                )}
+              </div>
+
+              {/* Save custom template form */}
+              {editingCustom && (
+                <div className="mb-3 p-3 border border-blue-700/50 bg-blue-900/10 rounded-md space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Template name"
+                    value={editingCustom.name}
+                    onChange={(e) => setEditingCustom({ ...editingCustom, name: e.target.value })}
+                    maxLength={30}
+                    className="block w-full px-3 py-1.5 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <textarea
+                    placeholder="Message body (use {firstName}, {company}, etc.)"
+                    value={editingCustom.body}
+                    onChange={(e) => setEditingCustom({ ...editingCustom, body: e.target.value })}
+                    rows={3}
+                    className="block w-full px-3 py-1.5 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => setEditingCustom(null)}
+                      className="px-2 py-1 text-xs text-slate-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveCustomTemplate}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Save Template
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Variable chips */}
+              <p className="text-sm text-slate-400 mb-2">
+                Edit your message. Available variables:
               </p>
               <div className="flex flex-wrap gap-1 mb-3">
                 {['{firstName}', '{lastName}', '{fullName}', '{company}', '{eventTitle}', '{eventMention}'].map((v) => (

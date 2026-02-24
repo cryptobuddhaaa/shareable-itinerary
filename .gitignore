@@ -38,3 +38,11 @@ dist-ssr
 *.key
 credentials.json
 service-account*.json
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+*.apk
+*.aab
+local.properties

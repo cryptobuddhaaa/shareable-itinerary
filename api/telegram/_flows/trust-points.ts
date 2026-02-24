@@ -48,7 +48,7 @@ export async function handleTrust(chatId: number, telegramUserId: number) {
 
   const { data: trust } = await supabase
     .from('trust_scores')
-    .select('trust_level, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, total_handshakes')
+    .select('trust_score, trust_level, score_handshakes, score_wallet, score_socials, score_events, score_community, telegram_premium, has_username, telegram_account_age_days, wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, x_verified, x_premium, total_handshakes')
     .eq('user_id', userId)
     .single();
 
@@ -64,28 +64,40 @@ export async function handleTrust(chatId: number, telegramUserId: number) {
     return;
   }
 
-  const levelNames: Record<number, string> = {
-    1: 'Newcomer',
-    2: 'Verified',
-    3: 'Trusted',
-    4: 'Established',
-    5: 'Champion',
-  };
+  const score = trust.trust_score || 0;
+  let label: string;
+  if (score >= 60) label = 'Champion';
+  else if (score >= 40) label = 'Established';
+  else if (score >= 25) label = 'Trusted';
+  else if (score >= 10) label = 'Verified';
+  else label = 'Newcomer';
 
-  const stars = '★'.repeat(trust.trust_level) + '☆'.repeat(5 - trust.trust_level);
   const check = (v: boolean) => v ? '✅' : '❌';
+  const bar = (val: number, max: number) => {
+    const filled = max > 0 ? Math.round((val / max) * 10) : 0;
+    return '▓'.repeat(filled) + '░'.repeat(10 - filled);
+  };
 
   await sendMessage(
     chatId,
-    `📊 <b>Trust Score: ${trust.trust_level}/5</b> — ${levelNames[trust.trust_level] || 'Unknown'}\n` +
-      `${stars}\n\n` +
-      `<b>Signals:</b>\n` +
-      `${check(trust.telegram_premium)} Telegram Premium (+2.0)\n` +
-      `${check(trust.has_profile_photo)} Profile Photo (+0.5)\n` +
-      `${check(trust.has_username)} Username (+0.5)\n` +
-      `${check(trust.telegram_account_age_days > 365)} Account Age > 1yr (+0.5)\n` +
-      `${check(trust.wallet_connected)} Verified Wallet (+0.5)\n` +
-      `${check(trust.total_handshakes >= 3)} 3+ Handshakes (+0.5)\n\n` +
+    `📊 <b>Trust Score: ${score}/100</b> — ${label}\n\n` +
+      `<b>Categories:</b>\n` +
+      `🤝 Handshakes ${bar(trust.score_handshakes || 0, 30)} ${trust.score_handshakes || 0}/30\n` +
+      `💰 Wallet     ${bar(trust.score_wallet || 0, 20)} ${trust.score_wallet || 0}/20\n` +
+      `👥 Socials    ${bar(trust.score_socials || 0, 20)} ${trust.score_socials || 0}/20\n` +
+      `📅 Events     ${bar(trust.score_events || 0, 20)} ${trust.score_events || 0}/20\n` +
+      `🏘 Community  ${bar(trust.score_community || 0, 10)} ${trust.score_community || 0}/10\n\n` +
+      `<b>Wallet signals:</b>\n` +
+      `${check(trust.wallet_connected)} Connected (+5)\n` +
+      `${check(trust.wallet_age_days != null && trust.wallet_age_days > 90)} Age > 90d (+5)\n` +
+      `${check(trust.wallet_tx_count != null && trust.wallet_tx_count > 10)} Txs > 10 (+5)\n` +
+      `${check(trust.wallet_has_tokens)} Holds tokens (+5)\n\n` +
+      `<b>Social signals:</b>\n` +
+      `${check(trust.telegram_premium)} Telegram Premium (+4)\n` +
+      `${check(trust.has_username)} Username (+4)\n` +
+      `${check(trust.telegram_account_age_days != null && trust.telegram_account_age_days > 365)} Account Age > 1yr (+4)\n` +
+      `${check(trust.x_verified)} Verified X account (+4)\n` +
+      `${check(trust.x_premium)} X Premium (+4)\n\n` +
       `Total Handshakes: ${trust.total_handshakes}`
   );
 }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.convenu.app.BuildConfig
@@ -20,7 +21,6 @@ import com.convenu.app.data.model.HandshakeDto
 import com.convenu.app.data.model.PointEntry
 import com.convenu.app.data.model.TrustScoreFull
 import com.convenu.app.ui.components.HandshakeStatusBadge
-import com.convenu.app.ui.components.TrustLevelIndicator
 import com.convenu.app.ui.theme.*
 
 @Composable
@@ -57,59 +57,96 @@ fun DashboardScreen(
                 CircularProgressIndicator()
             }
         } else {
-            // Trust Score Card
+            // Stat cards row
             val trust = uiState.trust
+            val full = uiState.trustFull
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatCard("Trust Score", if (trust != null) "${trust.trustScore}/100" else "--", ConvenuPurple, Modifier.weight(1f))
+                StatCard("Points", "${uiState.totalPoints}", ConvenuGreen, Modifier.weight(1f))
+                StatCard("Handshakes", "${trust?.totalHandshakes ?: 0}", ConvenuBlue, Modifier.weight(1f))
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Trust Score Breakdown Card
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Shield, null, Modifier.size(24.dp), tint = ConvenuPurple)
                         Spacer(Modifier.width(8.dp))
                         Text("Trust Score", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    if (trust != null) {
-                        TrustLevelIndicator(level = trust.trustLevel)
-                        Spacer(Modifier.height(8.dp))
-                        Row {
-                            Icon(Icons.Filled.Star, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.width(4.dp))
-                            Text("Level ${trust.trustLevel}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.width(16.dp))
-                            Icon(Icons.Filled.Handshake, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.width(4.dp))
-                            Text("${trust.totalHandshakes} handshakes", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (trust != null) {
+                            Spacer(Modifier.weight(1f))
+                            Text("${trust.trustScore}/100", style = MaterialTheme.typography.titleLarge, color = ConvenuPurple, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.AccountBalanceWallet, null, Modifier.size(16.dp), tint = if (trust.walletConnected) ConvenuGreen else MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.width(4.dp))
+                    }
+
+                    if (full != null) {
+                        Spacer(Modifier.height(16.dp))
+
+                        // Handshakes (max 30)
+                        CategoryHeader("Handshakes", full.scoreHandshakes, 30, ConvenuBlue)
+                        TrustSignalRow("Minted handshakes (${full.totalHandshakes}/30)", full.totalHandshakes > 0, "+${full.scoreHandshakes}")
+                        SignalNote("1 point per successful handshake, max 30")
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // Wallet (max 20)
+                        CategoryHeader("Wallet", full.scoreWallet, 20, ConvenuGreen)
+                        TrustSignalRow("Wallet connected", full.walletConnected, "+5")
+                        TrustSignalRow(
+                            "Wallet age > 90 days${if (full.walletAgeDays != null) " (${full.walletAgeDays}d)" else ""}",
+                            full.walletAgeDays != null && full.walletAgeDays > 90,
+                            "+5",
+                        )
+                        TrustSignalRow(
+                            "Transaction count > 10${if (full.walletTxCount != null) " (${full.walletTxCount})" else ""}",
+                            full.walletTxCount != null && full.walletTxCount > 10,
+                            "+5",
+                        )
+                        TrustSignalRow("Holds tokens/NFTs", full.walletHasTokens, "+5")
+                        if (!full.walletConnected) {
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                if (trust.walletConnected) "Wallet Connected" else "No Wallet",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (trust.walletConnected) ConvenuGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                "Connect wallet",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable { onNavigateToWallet() },
                             )
-                            if (!trust.walletConnected) {
-                                Spacer(Modifier.width(8.dp))
-                                Text("Connect", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable { onNavigateToWallet() })
-                            }
                         }
 
-                        // Trust signal breakdown
-                        uiState.trustFull?.let { full ->
-                            Spacer(Modifier.height(12.dp))
-                            HorizontalDivider()
-                            Spacer(Modifier.height(12.dp))
-                            Text("Trust Signals", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(8.dp))
-                            TrustSignalRow("Telegram Premium", full.telegramPremium)
-                            TrustSignalRow("Profile Photo", full.hasProfilePhoto)
-                            TrustSignalRow("Username Set", full.hasUsername)
-                            TrustSignalRow("Account Age > 30d", (full.telegramAccountAgeDays ?: 0) > 30)
-                            TrustSignalRow("Wallet Connected", full.walletConnected)
-                            TrustSignalRow("3+ Handshakes", full.totalHandshakes >= 3)
-                        }
-                    } else {
-                        Text("Unable to load trust score", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(12.dp))
+
+                        // Socials (max 20)
+                        CategoryHeader("Socials", full.scoreSocials, 20, ConvenuPurple)
+                        TrustSignalRow("Telegram Premium", full.telegramPremium, "+4")
+                        TrustSignalRow("Telegram username", full.hasUsername, "+4")
+                        TrustSignalRow(
+                            "Telegram account age > 1yr${if (full.telegramAccountAgeDays != null) " (${full.telegramAccountAgeDays / 365}y)" else ""}",
+                            full.telegramAccountAgeDays != null && full.telegramAccountAgeDays > 365,
+                            "+4",
+                        )
+                        TrustSignalRow("Verified X account", full.xVerified, "+4")
+                        TrustSignalRow("X Premium", full.xPremium, "+4")
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // Events (max 20) — placeholder
+                        CategoryHeader("Events", full.scoreEvents, 20, ConvenuYellow)
+                        SignalNote("Coming soon: Proof of Attendance soulbound NFTs from event organizers.")
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // Community (max 10) — placeholder
+                        CategoryHeader("Community", full.scoreCommunity, 10, Slate400)
+                        SignalNote("Coming soon: Community vouches from registered organizations.")
+                    } else if (trust == null) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Link your socials and wallet to get started.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -183,7 +220,26 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun TrustSignalRow(label: String, active: Boolean) {
+private fun StatCard(label: String, value: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, style = MaterialTheme.typography.titleLarge, color = color, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun CategoryHeader(title: String, score: Int, max: Int, color: androidx.compose.ui.graphics.Color) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+        Text("$score/$max", style = MaterialTheme.typography.labelLarge, color = color, fontWeight = FontWeight.Bold)
+    }
+    Spacer(Modifier.height(4.dp))
+}
+
+@Composable
+private fun TrustSignalRow(label: String, active: Boolean, points: String = "") {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(
             if (active) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
@@ -191,8 +247,16 @@ private fun TrustSignalRow(label: String, active: Boolean) {
             tint = if (active) ConvenuGreen else Slate500,
         )
         Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.bodySmall, color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.bodySmall, color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        if (points.isNotEmpty()) {
+            Text(points, style = MaterialTheme.typography.labelSmall, color = if (active) ConvenuGreen else Slate500)
+        }
     }
+}
+
+@Composable
+private fun SignalNote(text: String) {
+    Text(text, style = MaterialTheme.typography.labelSmall, color = Slate500, modifier = Modifier.padding(start = 24.dp, top = 2.dp))
 }
 
 @Composable

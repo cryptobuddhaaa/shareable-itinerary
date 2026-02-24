@@ -1,5 +1,5 @@
 /**
- * Dashboard — shows trust score breakdown, points total, and handshake history.
+ * Dashboard — shows trust score breakdown (0-100, 5 categories), points total, and handshake history.
  */
 
 import { useEffect, useState } from 'react';
@@ -31,44 +31,150 @@ function mapRowToPoint(row: Record<string, unknown>): PointEntry {
 function mapRowToTrust(row: Record<string, unknown>): TrustScore {
   return {
     userId: row.user_id as string,
+    trustScore: (row.trust_score as number) || 0,
+    scoreHandshakes: (row.score_handshakes as number) || 0,
+    scoreWallet: (row.score_wallet as number) || 0,
+    scoreSocials: (row.score_socials as number) || 0,
+    scoreEvents: (row.score_events as number) || 0,
+    scoreCommunity: (row.score_community as number) || 0,
     telegramPremium: row.telegram_premium as boolean,
-    hasProfilePhoto: row.has_profile_photo as boolean,
     hasUsername: row.has_username as boolean,
     telegramAccountAgeDays: row.telegram_account_age_days as number | null,
     walletConnected: row.wallet_connected as boolean,
+    walletAgeDays: row.wallet_age_days as number | null,
+    walletTxCount: row.wallet_tx_count as number | null,
+    walletHasTokens: row.wallet_has_tokens as boolean,
+    xVerified: row.x_verified as boolean,
+    xPremium: row.x_premium as boolean,
     totalHandshakes: row.total_handshakes as number,
     trustLevel: row.trust_level as number,
     updatedAt: row.updated_at as string,
   };
 }
 
-function TrustLevelBadge({ level }: { level: number }) {
-  const config: Record<number, { label: string; color: string; bg: string }> = {
-    1: { label: 'Newcomer', color: 'text-slate-300', bg: 'bg-slate-700' },
-    2: { label: 'Verified', color: 'text-blue-300', bg: 'bg-blue-900/40' },
-    3: { label: 'Trusted', color: 'text-green-300', bg: 'bg-green-900/40' },
-    4: { label: 'Established', color: 'text-purple-300', bg: 'bg-purple-900/40' },
-    5: { label: 'Champion', color: 'text-yellow-300', bg: 'bg-yellow-900/40' },
-  };
-  const c = config[level] || config[1];
+function TrustScoreBadge({ score }: { score: number }) {
+  let label: string;
+  let color: string;
+  let bg: string;
+  if (score >= 60) { label = 'Champion'; color = 'text-yellow-300'; bg = 'bg-yellow-900/40'; }
+  else if (score >= 40) { label = 'Established'; color = 'text-purple-300'; bg = 'bg-purple-900/40'; }
+  else if (score >= 25) { label = 'Trusted'; color = 'text-green-300'; bg = 'bg-green-900/40'; }
+  else if (score >= 10) { label = 'Verified'; color = 'text-blue-300'; bg = 'bg-blue-900/40'; }
+  else { label = 'Newcomer'; color = 'text-slate-300'; bg = 'bg-slate-700'; }
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${c.bg} ${c.color}`}>
-      {'★'.repeat(level)}{'☆'.repeat(5 - level)} {c.label}
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${bg} ${color}`}>
+      {label}
     </span>
   );
 }
 
-function SignalRow({ label, active, points }: { label: string; active: boolean; points: string }) {
+function ScoreRing({ score, max }: { score: number; max: number }) {
+  const pct = max > 0 ? Math.min(100, (score / max) * 100) : 0;
+  const radius = 36;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (pct / 100) * circumference;
+
+  let strokeColor: string;
+  if (pct >= 75) strokeColor = '#4ade80'; // green
+  else if (pct >= 40) strokeColor = '#60a5fa'; // blue
+  else if (pct > 0) strokeColor = '#fbbf24'; // yellow
+  else strokeColor = '#475569'; // slate
+
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="relative w-24 h-24 mx-auto">
+      <svg className="w-24 h-24 -rotate-90" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r={radius} fill="none" stroke="#1e293b" strokeWidth="6" />
+        <circle
+          cx="40" cy="40" r={radius} fill="none"
+          stroke={strokeColor} strokeWidth="6" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold text-white font-mono">{score}</span>
+        <span className="text-[10px] text-slate-400">/ {max}</span>
+      </div>
+    </div>
+  );
+}
+
+// Collapsible category component
+function CategorySection({
+  title,
+  score,
+  max,
+  color,
+  children,
+}: {
+  title: string;
+  score: number;
+  max: number;
+  color: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const pct = max > 0 ? Math.min(100, (score / max) * 100) : 0;
+
+  const barColors: Record<string, string> = {
+    blue: 'bg-blue-500',
+    green: 'bg-green-500',
+    purple: 'bg-purple-500',
+    amber: 'bg-amber-500',
+    cyan: 'bg-cyan-500',
+  };
+
+  return (
+    <div className="border-b border-slate-700/50 last:border-b-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 py-3 text-left hover:bg-slate-700/20 transition-colors"
+      >
+        <svg
+          className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium text-slate-200">{title}</span>
+            <span className="text-sm font-mono text-slate-300">{score}/{max}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${barColors[color] || barColors.blue} transition-all duration-500`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div className="pl-7 pb-3 space-y-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubSignal({ label, active, points }: { label: string; active: boolean; points: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${active ? 'bg-green-400' : 'bg-slate-600'}`} />
-        <span className={active ? 'text-slate-200' : 'text-slate-500'}>{label}</span>
+        <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-green-400' : 'bg-slate-600'}`} />
+        <span className={`text-xs ${active ? 'text-slate-300' : 'text-slate-500'}`}>{label}</span>
       </div>
       <span className={`text-xs font-mono ${active ? 'text-green-400' : 'text-slate-600'}`}>
         {active ? points : '+0'}
       </span>
     </div>
+  );
+}
+
+function PlaceholderMessage({ text }: { text: string }) {
+  return (
+    <p className="text-xs text-slate-500 italic py-1">{text}</p>
   );
 }
 
@@ -90,9 +196,21 @@ export default function Dashboard() {
     const loadData = async () => {
       setLoading(true);
       try {
+        // Trigger trust score recomputation before reading
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) {
+          await fetch('/api/trust/compute', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          }).catch(() => { /* non-fatal — read stale data below */ });
+        }
+
         const { data: trustData } = await supabase
           .from('trust_scores')
-          .select('user_id, telegram_premium, has_profile_photo, has_username, telegram_account_age_days, wallet_connected, total_handshakes, trust_level, updated_at')
+          .select('*')
           .eq('user_id', user.id)
           .single();
 
@@ -142,7 +260,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Header stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Trust Level" value={trustScore ? `${trustScore.trustLevel}/5` : '--'} color="purple" />
+        <StatCard label="Trust Score" value={trustScore ? `${trustScore.trustScore}/100` : '--'} color="purple" />
         <StatCard label="Total Points" value={totalPoints.toString()} color="green" />
         <StatCard label="Handshakes" value={mintedHandshakes.length.toString()} color="blue" />
         <StatCard
@@ -157,31 +275,63 @@ export default function Dashboard() {
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Trust Score</h3>
-            {trustScore && <TrustLevelBadge level={trustScore.trustLevel} />}
+            {trustScore && <TrustScoreBadge score={trustScore.trustScore} />}
           </div>
 
           {trustScore ? (
-            <div className="divide-y divide-slate-700/50">
-              <SignalRow label="Telegram Premium" active={trustScore.telegramPremium} points="+2.0" />
-              <SignalRow label="Profile Photo" active={trustScore.hasProfilePhoto} points="+0.5" />
-              <SignalRow label="Telegram Username" active={trustScore.hasUsername} points="+0.5" />
-              <SignalRow
-                label={`Account Age ${trustScore.telegramAccountAgeDays ? `(${Math.floor(trustScore.telegramAccountAgeDays / 365)}y)` : ''}`}
-                active={!!trustScore.telegramAccountAgeDays && trustScore.telegramAccountAgeDays > 365}
-                points="+0.5"
-              />
-              <SignalRow label="Verified Wallet" active={trustScore.walletConnected} points="+0.5" />
-              <SignalRow label="3+ Handshakes" active={trustScore.totalHandshakes >= 3} points="+0.5" />
+            <>
+              <ScoreRing score={trustScore.trustScore} max={100} />
 
-              <div className="flex items-center justify-between pt-3 mt-1">
-                <span className="text-white font-medium">Computed Score</span>
-                <span className="text-white font-mono font-bold">{trustScore.trustLevel}/5</span>
+              <div className="mt-4">
+                <CategorySection title="Handshakes" score={trustScore.scoreHandshakes} max={30} color="blue">
+                  <SubSignal
+                    label={`Minted handshakes (${trustScore.totalHandshakes}/30)`}
+                    active={trustScore.totalHandshakes > 0}
+                    points={`+${trustScore.scoreHandshakes}`}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">1 point per successful handshake, max 30</p>
+                </CategorySection>
+
+                <CategorySection title="Wallet" score={trustScore.scoreWallet} max={20} color="green">
+                  <SubSignal label="Wallet connected" active={trustScore.walletConnected} points="+5" />
+                  <SubSignal
+                    label={`Wallet age > 90 days${trustScore.walletAgeDays != null ? ` (${trustScore.walletAgeDays}d)` : ''}`}
+                    active={trustScore.walletAgeDays != null && trustScore.walletAgeDays > 90}
+                    points="+5"
+                  />
+                  <SubSignal
+                    label={`Transaction count > 10${trustScore.walletTxCount != null ? ` (${trustScore.walletTxCount})` : ''}`}
+                    active={trustScore.walletTxCount != null && trustScore.walletTxCount > 10}
+                    points="+5"
+                  />
+                  <SubSignal label="Holds tokens/NFTs" active={trustScore.walletHasTokens} points="+5" />
+                </CategorySection>
+
+                <CategorySection title="Socials" score={trustScore.scoreSocials} max={20} color="purple">
+                  <SubSignal label="Telegram Premium" active={trustScore.telegramPremium} points="+4" />
+                  <SubSignal label="Telegram username" active={trustScore.hasUsername} points="+4" />
+                  <SubSignal
+                    label={`Telegram account age > 1yr${trustScore.telegramAccountAgeDays ? ` (${Math.floor(trustScore.telegramAccountAgeDays / 365)}y)` : ''}`}
+                    active={!!trustScore.telegramAccountAgeDays && trustScore.telegramAccountAgeDays > 365}
+                    points="+4"
+                  />
+                  <SubSignal label="Verified X account" active={trustScore.xVerified} points="+4" />
+                  <SubSignal label="X Premium" active={trustScore.xPremium} points="+4" />
+                </CategorySection>
+
+                <CategorySection title="Events" score={trustScore.scoreEvents} max={20} color="amber">
+                  <PlaceholderMessage text="Coming soon: Event organizers will be able to issue Proof of Attendance soulbound NFTs to attendees. Verified event attendance will contribute up to 20 points to your Trust Score." />
+                </CategorySection>
+
+                <CategorySection title="Community" score={trustScore.scoreCommunity} max={10} color="cyan">
+                  <PlaceholderMessage text="Coming soon: Communities and organizations can register on Convenu and vouch for their members. Community vouches will contribute up to 10 points to your Trust Score." />
+                </CategorySection>
               </div>
-            </div>
+            </>
           ) : (
             <div className="text-center py-6">
               <p className="text-slate-400">No trust data yet.</p>
-              <p className="text-slate-500 text-sm mt-1">Link your Telegram account to get started.</p>
+              <p className="text-slate-500 text-sm mt-1">Link your socials and wallet in your Profile to get started.</p>
             </div>
           )}
         </div>

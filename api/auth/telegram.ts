@@ -9,6 +9,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { estimateTelegramAccountAgeDays } from '../_lib/telegram-age.js';
+import { computeTrustCategories } from '../trust/compute.js';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -50,7 +52,10 @@ function verifyInitData(initData: string): { valid: boolean; user?: TelegramWebA
     .update(dataCheckString)
     .digest('hex');
 
-  if (computed !== hash) {
+  if (
+    computed.length !== hash.length ||
+    !crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(hash))
+  ) {
     return { valid: false };
   }
 
@@ -122,6 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let userId: string;
     let userEmail: string;
+    let isNewAccount = false;
 
     if (link?.user_id) {
       // Existing linked user — get their email
@@ -187,6 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         userId = newUser.user.id;
         userEmail = syntheticEmail;
+        isNewAccount = true;
       }
 
       // 4. Re-create the telegram_links entry
@@ -198,7 +205,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 5. Generate a magic link token for the user (creates a real Supabase session)
+    // 5. Write Telegram trust signals and compute trust score (0-100)
+    {
+      const { data: existing } = await supabase
+        .from('trust_scores')
+        .select('wallet_connected, wallet_age_days, wallet_tx_count, wallet_has_tokens, total_handshakes, telegram_account_age_days, x_verified, x_premium')
+        .eq('user_id', userId)
+        .single();
+
+      const telegramPremium = tgUser.is_premium || false;
+      const hasUsername = !!tgUser.username;
+      const walletConnected = existing?.wallet_connected || false;
+      const totalHandshakes = existing?.total_handshakes || 0;
+      const accountAgeDays = existing?.telegram_account_age_days
+        ?? estimateTelegramAccountAgeDays(telegramUserId);
+      const walletAgeDays = existing?.wallet_age_days ?? null;
+      const walletTxCount = existing?.wallet_tx_count ?? null;
+      const walletHasTokens = existing?.wallet_has_tokens || false;
+      const xVerified = existing?.x_verified || false;
+      const xPremium = existing?.x_premium || false;
+
+      const scores = computeTrustCategories({
+        totalHandshakes,
+        walletConnected,
+        walletAgeDays,
+        walletTxCount,
+        walletHasTokens,
+        telegramPremium,
+        hasUsername,
+        telegramAccountAgeDays: accountAgeDays,
+        xVerified,
+        xPremium,
+      });
+
+      await supabase.from('trust_scores').upsert(
+        {
+          user_id: userId,
+          telegram_premium: telegramPremium,
+          has_username: hasUsername,
+          telegram_account_age_days: accountAgeDays,
+          wallet_connected: walletConnected,
+          wallet_age_days: walletAgeDays,
+          wallet_tx_count: walletTxCount,
+          wallet_has_tokens: walletHasTokens,
+          x_verified: xVerified,
+          x_premium: xPremium,
+          total_handshakes: totalHandshakes,
+          trust_score: scores.trustScore,
+          score_handshakes: scores.scoreHandshakes,
+          score_wallet: scores.scoreWallet,
+          score_socials: scores.scoreSocials,
+          score_events: scores.scoreEvents,
+          score_community: scores.scoreCommunity,
+          trust_level: scores.trustLevel,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+    }
+
+    // 6. Generate a magic link token for the user (creates a real Supabase session)
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: userEmail,
@@ -209,10 +275,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to generate session' });
     }
 
-    // 6. Return the token hash to the client
+    // 7. Return the token hash to the client
     return res.status(200).json({
       token_hash: linkData.properties.hashed_token,
       user_id: userId,
+      new_account: isNewAccount,
       telegram_user: {
         id: tgUser.id,
         first_name: tgUser.first_name,

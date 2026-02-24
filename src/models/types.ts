@@ -151,12 +151,37 @@ export interface Handshake {
 
 export interface TrustScore {
   userId: string;
+  trustScore: number; // 0-100 composite score
+  scoreHandshakes: number; // 0-30
+  scoreWallet: number; // 0-20
+  scoreSocials: number; // 0-20
+  scoreEvents: number; // 0-20
+  scoreCommunity: number; // 0-10
   telegramPremium: boolean;
-  hasProfilePhoto: boolean;
   hasUsername: boolean;
   telegramAccountAgeDays: number | null;
   walletConnected: boolean;
+  walletAgeDays: number | null;
+  walletTxCount: number | null;
+  walletHasTokens: boolean;
+  xVerified: boolean;
+  xPremium: boolean;
   totalHandshakes: number;
-  trustLevel: number;
+  trustLevel: number; // legacy 1-5 (kept for backward compat)
+  updatedAt: string;
+}
+
+export interface UserProfile {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+  position: string | null;
+  bio: string | null;
+  twitterHandle: string | null;
+  linkedinUrl: string | null;
+  website: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
   updatedAt: string;
 }

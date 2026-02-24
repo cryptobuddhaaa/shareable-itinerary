@@ -254,32 +254,44 @@ export function HandshakeButton({ contact, userId }: HandshakeButtonProps) {
     }
   };
 
+  const isDisabledNoWallet = !wallet && !isTelegramWebApp;
+
   return (
     <>
-      <button
-        onClick={handleInitiate}
-        disabled={loading || tgGenerating || (!wallet && !isTelegramWebApp)}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border transition-colors ${
-          wallet || isTelegramWebApp
-            ? 'bg-purple-900/30 border-purple-700/50 text-purple-300 hover:bg-purple-900/50 hover:text-purple-200'
-            : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-        }`}
-        title={wallet ? `Send handshake to ${contact.firstName} (${HANDSHAKE_FEE_SOL} SOL)` : isTelegramWebApp ? 'Open in wallet browser to send handshake' : 'Connect wallet first'}
-        aria-label={`Send handshake to ${contact.firstName} ${contact.lastName}`}
-      >
-        {loading || tgGenerating ? (
-          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-        ) : (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0 0v2.5m0-2.5h2.5M7 14H4.5m11-3.5V14m0 0v2.5m0-2.5h2.5M15.5 14H13" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
-          </svg>
+      <div className="relative group">
+        <button
+          onClick={handleInitiate}
+          disabled={loading || tgGenerating || isDisabledNoWallet}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border transition-colors ${
+            wallet || isTelegramWebApp
+              ? 'bg-purple-900/30 border-purple-700/50 text-purple-300 hover:bg-purple-900/50 hover:text-purple-200'
+              : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+          }`}
+          title={wallet ? `Send handshake to ${contact.firstName} (${HANDSHAKE_FEE_SOL} SOL)` : isTelegramWebApp ? 'Open in wallet browser to send handshake' : undefined}
+          aria-label={`Send handshake to ${contact.firstName} ${contact.lastName}`}
+        >
+          {loading || tgGenerating ? (
+            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0 0v2.5m0-2.5h2.5M7 14H4.5m11-3.5V14m0 0v2.5m0-2.5h2.5M15.5 14H13" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
+            </svg>
+          )}
+          <span>{loading ? 'Signing...' : tgGenerating ? 'Generating...' : isStuckPending ? 'Retry' : 'Handshake'}</span>
+        </button>
+        {isDisabledNoWallet && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 pointer-events-none">
+            <div className="bg-slate-900 border border-slate-600 text-slate-200 text-xs rounded-md px-3 py-2 whitespace-nowrap shadow-lg">
+              Connect & verify your wallet to send handshakes
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-600" />
+            </div>
+          </div>
         )}
-        <span>{loading ? 'Signing...' : tgGenerating ? 'Generating...' : isStuckPending ? 'Retry' : 'Handshake'}</span>
-      </button>
+      </div>
       <ConfirmDialog {...dialogProps} />
     </>
   );

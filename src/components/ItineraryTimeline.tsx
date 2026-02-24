@@ -188,7 +188,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
   return (
     <div>
       <div className="bg-slate-800 shadow rounded-lg p-6 mb-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div>
             <h2 className="text-xl font-bold text-white">{itinerary.title}</h2>
             <p className="text-slate-300 mt-1">{itinerary.location}</p>
@@ -199,7 +199,7 @@ export default function ItineraryTimeline({ sharedItinerary, readOnly = false }:
               <p className="text-sm text-slate-300 mt-2">{itinerary.goals}</p>
             )}
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             {!readOnly && (
               <GoogleCalendarImport
                 itinerary={itinerary}

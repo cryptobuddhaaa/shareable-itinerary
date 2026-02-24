@@ -17,8 +17,9 @@ import { useUserWallet } from './hooks/useUserWallet';
 import { useHandshakes } from './hooks/useHandshakes';
 import { HandshakeClaimPage } from './components/HandshakeClaimPage';
 import Dashboard from './components/Dashboard';
+import ProfilePage from './components/ProfilePage';
 
-type ActiveTab = 'itinerary' | 'contacts' | 'shared' | 'dashboard';
+type ActiveTab = 'itinerary' | 'contacts' | 'shared' | 'dashboard' | 'profile';
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -35,6 +36,14 @@ function App() {
   const [viewedSharedItineraries, setViewedSharedItineraries] = useState<Itinerary[]>([]);
   const [selectedSharedItinerary, setSelectedSharedItinerary] = useState<Itinerary | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
+
+  // Auto-switch to profile tab when redirected from X OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('x_verified') || params.has('x_error')) {
+      setActiveTab('profile');
+    }
+  }, []);
 
   const itinerary = currentItinerary();
 
@@ -460,6 +469,17 @@ function App() {
                     </span>
                   )}
                 </button>
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  aria-current={activeTab === 'profile' ? 'page' : undefined}
+                  className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
+                    activeTab === 'profile'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                  }`}
+                >
+                  Profile
+                </button>
               </nav>
             </div>
 
@@ -646,6 +666,8 @@ function App() {
             {activeTab === 'contacts' && <ContactsPage />}
 
             {activeTab === 'dashboard' && <Dashboard />}
+
+            {activeTab === 'profile' && <ProfilePage />}
           </div>
       </main>
 
@@ -712,6 +734,18 @@ function App() {
                   {pendingForMe}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              aria-current={activeTab === 'profile' ? 'page' : undefined}
+              className={`flex-1 flex flex-col items-center py-2 text-xs ${
+                activeTab === 'profile' ? 'text-blue-400' : 'text-slate-400'
+              }`}
+            >
+              <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Profile
             </button>
           </div>
         </nav>

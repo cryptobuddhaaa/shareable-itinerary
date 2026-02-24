@@ -17,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authUser) return;
     const { code } = req.body;
 
-    if (!code) {
+    if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Authorization code is required' });
     }
 
@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!clientId || !clientSecret || !redirectUri) {
       return res.status(500).json({
-        error: 'Google OAuth not configured. Please set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.',
+        error: 'Google Calendar integration is not configured. Please contact support.',
       });
     }
 
