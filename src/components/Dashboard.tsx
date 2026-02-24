@@ -331,7 +331,7 @@ export default function Dashboard() {
           ) : (
             <div className="text-center py-6">
               <p className="text-slate-400">No trust data yet.</p>
-              <p className="text-slate-500 text-sm mt-1">Link your Telegram account to get started.</p>
+              <p className="text-slate-500 text-sm mt-1">Link your socials and wallet in your Profile to get started.</p>
             </div>
           )}
         </div>
