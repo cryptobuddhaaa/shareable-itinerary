@@ -89,11 +89,8 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
-    // Solana Mobile
+    // Solana Mobile (web3-solana is a transitive dep of the MWA clientlib)
     implementation(libs.solana.mobile.wallet.adapter.clientlib)
-    implementation(libs.solana.web3.core)
-    implementation(libs.solana.rpc.core)
-    implementation(libs.solana.publickey)
 
     // Image loading
     implementation(libs.coil.compose)
