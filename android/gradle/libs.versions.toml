@@ -17,6 +17,7 @@ datastorePreferences = "1.1.1"
 solanaMobileWalletAdapterClientlib = "2.1.0"
 coil = "2.7.0"
 timber = "5.0.1"
+material = "1.12.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,6 +44,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 solana-mobile-wallet-adapter-clientlib = { group = "com.solanamobile", name = "mobile-wallet-adapter-clientlib-ktx", version.ref = "solanaMobileWalletAdapterClientlib" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+google-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

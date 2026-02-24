@@ -57,6 +57,7 @@ android {
 
 dependencies {
     // Core Android
+    implementation(libs.google.material)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
