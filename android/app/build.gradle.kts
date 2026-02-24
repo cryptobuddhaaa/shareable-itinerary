@@ -23,7 +23,7 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"sb_publishable_vtqiUCdcXZf8j1cVs960rA_sjo2i5Uk\"")
         buildConfigField("String", "SOLANA_NETWORK", "\"devnet\"")
         buildConfigField("String", "SOLANA_RPC_URL", "\"https://api.devnet.solana.com\"")
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"") // Set your Google OAuth Web Client ID
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"331190464904-72g6u2ev34boat76gfviip1fmpcmo1n5.apps.googleusercontent.com\"")
     }
 
     buildTypes {
