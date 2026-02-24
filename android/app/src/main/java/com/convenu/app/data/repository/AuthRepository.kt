@@ -10,6 +10,8 @@ import com.convenu.app.data.model.TelegramAuthRequest
 import com.convenu.app.data.model.TelegramAuthResponse
 import com.convenu.app.data.model.WalletAuthRequest
 import com.convenu.app.data.model.WalletAuthResponse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -53,31 +55,33 @@ class AuthRepository @Inject constructor(
         }
 
         return try {
-            val requestBody = json.encodeToString(
-                SupabaseTokenExchangeRequest.serializer(),
-                SupabaseTokenExchangeRequest(tokenHash = tokenHash),
-            )
-
-            val request = Request.Builder()
-                .url("$supabaseUrl/auth/v1/verify")
-                .post(requestBody.toRequestBody("application/json".toMediaType()))
-                .header("apikey", supabaseKey)
-                .header("Content-Type", "application/json")
-                .build()
-
-            val response = okHttpClient.newCall(request).execute()
-            val body = response.body?.string()
-
-            if (response.isSuccessful && body != null) {
-                val tokenResponse = json.decodeFromString<SupabaseTokenExchangeResponse>(body)
-                tokenManager.saveSession(
-                    jwt = tokenResponse.accessToken,
-                    userId = tokenResponse.user?.id ?: "",
-                    refreshToken = tokenResponse.refreshToken,
+            withContext(Dispatchers.IO) {
+                val requestBody = json.encodeToString(
+                    SupabaseTokenExchangeRequest.serializer(),
+                    SupabaseTokenExchangeRequest(tokenHash = tokenHash),
                 )
-                Result.success(tokenResponse.accessToken)
-            } else {
-                Result.failure(Exception("Token exchange failed (${response.code})"))
+
+                val request = Request.Builder()
+                    .url("$supabaseUrl/auth/v1/verify")
+                    .post(requestBody.toRequestBody("application/json".toMediaType()))
+                    .header("apikey", supabaseKey)
+                    .header("Content-Type", "application/json")
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                val body = response.body?.string()
+
+                if (response.isSuccessful && body != null) {
+                    val tokenResponse = json.decodeFromString<SupabaseTokenExchangeResponse>(body)
+                    tokenManager.saveSession(
+                        jwt = tokenResponse.accessToken,
+                        userId = tokenResponse.user?.id ?: "",
+                        refreshToken = tokenResponse.refreshToken,
+                    )
+                    Result.success(tokenResponse.accessToken)
+                } else {
+                    Result.failure(Exception("Token exchange failed (${response.code})"))
+                }
             }
         } catch (e: Exception) {
             Timber.e(e, "exchangeTokenHash failed")
@@ -98,34 +102,36 @@ class AuthRepository @Inject constructor(
         }
 
         return try {
-            val requestBody = json.encodeToString(
-                GoogleIdTokenRequest.serializer(),
-                GoogleIdTokenRequest(idToken = idToken),
-            )
-
-            val request = Request.Builder()
-                .url("$supabaseUrl/auth/v1/token?grant_type=id_token")
-                .post(requestBody.toRequestBody("application/json".toMediaType()))
-                .header("apikey", supabaseKey)
-                .header("Content-Type", "application/json")
-                .build()
-
-            val response = okHttpClient.newCall(request).execute()
-            val body = response.body?.string()
-
-            if (response.isSuccessful && body != null) {
-                val tokenResponse = json.decodeFromString<SupabaseTokenExchangeResponse>(body)
-                tokenManager.saveSession(
-                    jwt = tokenResponse.accessToken,
-                    userId = tokenResponse.user?.id ?: "",
-                    refreshToken = tokenResponse.refreshToken,
+            withContext(Dispatchers.IO) {
+                val requestBody = json.encodeToString(
+                    GoogleIdTokenRequest.serializer(),
+                    GoogleIdTokenRequest(idToken = idToken),
                 )
-                Result.success(tokenResponse.accessToken)
-            } else {
-                val errorMsg = body?.let {
-                    runCatching { json.decodeFromString<ErrorResponse>(it).error }.getOrNull()
-                } ?: "Google sign-in failed (${response.code})"
-                Result.failure(Exception(errorMsg))
+
+                val request = Request.Builder()
+                    .url("$supabaseUrl/auth/v1/token?grant_type=id_token")
+                    .post(requestBody.toRequestBody("application/json".toMediaType()))
+                    .header("apikey", supabaseKey)
+                    .header("Content-Type", "application/json")
+                    .build()
+
+                val response = okHttpClient.newCall(request).execute()
+                val body = response.body?.string()
+
+                if (response.isSuccessful && body != null) {
+                    val tokenResponse = json.decodeFromString<SupabaseTokenExchangeResponse>(body)
+                    tokenManager.saveSession(
+                        jwt = tokenResponse.accessToken,
+                        userId = tokenResponse.user?.id ?: "",
+                        refreshToken = tokenResponse.refreshToken,
+                    )
+                    Result.success(tokenResponse.accessToken)
+                } else {
+                    val errorMsg = body?.let {
+                        runCatching { json.decodeFromString<ErrorResponse>(it).error }.getOrNull()
+                    } ?: "Google sign-in failed (${response.code})"
+                    Result.failure(Exception(errorMsg))
+                }
             }
         } catch (e: Exception) {
             Timber.e(e, "authWithGoogle failed")

@@ -1,7 +1,5 @@
 package com.convenu.app.ui.screens.login
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,9 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -155,27 +150,7 @@ fun LoginScreen(
             }
         }
 
-        Spacer(Modifier.height(32.dp))
-
-        // Tertiary: Telegram
-        TextButton(
-            onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/ConvenuBot"))
-                context.startActivity(intent)
-            },
-            enabled = !uiState.isLoading,
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text("Login via Telegram", style = MaterialTheme.typography.bodyMedium)
-        }
+        Spacer(Modifier.height(16.dp))
 
         // Error display
         uiState.error?.let { error ->
