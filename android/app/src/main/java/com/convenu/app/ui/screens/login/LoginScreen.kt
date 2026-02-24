@@ -2,7 +2,6 @@ package com.convenu.app.ui.screens.login
 
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,14 +30,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
+import com.convenu.app.LocalActivityResultSender
 
 @Composable
 fun LoginScreen(
@@ -47,7 +45,7 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val sender = remember { ActivityResultSender(context as ComponentActivity) }
+    val sender = LocalActivityResultSender.current
 
     LaunchedEffect(uiState.isLoggedIn) {
         if (uiState.isLoggedIn) {
