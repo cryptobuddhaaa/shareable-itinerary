@@ -164,13 +164,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${WEBAPP_URL}/profile?x_error=user_fetch`);
       }
 
-      const userData = await userRes.json() as { data?: { username?: string; verified?: boolean } };
+      const userData = await userRes.json() as { data?: { id?: string; username?: string; verified?: boolean } };
+      const xUserId = userData.data?.id;
       const xUsername = userData.data?.username;
       const xPremium = userData.data?.verified || false;
 
+      if (!xUserId) {
+        console.error('X user data missing id field');
+        return res.redirect(302, `${WEBAPP_URL}/profile?x_error=user_fetch`);
+      }
+
       const userId = payload.userId as string;
 
-      // Set x_verified = true, premium status, and store refresh token for re-verification
+      // UNIQUENESS CHECK: Ensure this X account isn't already verified by another user
+      const { data: existingOwner } = await supabase
+        .from('trust_scores')
+        .select('user_id')
+        .eq('x_user_id', xUserId)
+        .eq('x_verified', true)
+        .neq('user_id', userId)
+        .limit(1);
+
+      if (existingOwner && existingOwner.length > 0) {
+        return res.redirect(302, `${WEBAPP_URL}/profile?x_error=already_linked`);
+      }
+
+      // Set x_verified = true, premium status, X user ID, and store refresh token
       await supabase
         .from('trust_scores')
         .upsert(
@@ -178,6 +197,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             user_id: userId,
             x_verified: true,
             x_premium: xPremium,
+            x_user_id: xUserId,
             x_refresh_token: refreshToken,
             updated_at: new Date().toISOString(),
           },
@@ -236,12 +256,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Clear x_verified, x_premium, and refresh token
+    // Clear x_verified, x_premium, x_user_id, and refresh token
     await supabase
       .from('trust_scores')
       .update({
         x_verified: false,
         x_premium: false,
+        x_user_id: null,
         x_refresh_token: null,
         updated_at: new Date().toISOString(),
       })

@@ -121,6 +121,7 @@ export default function ProfilePage() {
         expired: 'OAuth session expired — please try again',
         token_exchange: 'Failed to exchange token with X',
         user_fetch: 'Failed to fetch X user info',
+        already_linked: 'This X account is already verified by another user',
         server: 'Server error during X verification',
       };
       toast.error(errMap[params.get('x_error')!] || 'X verification failed');
