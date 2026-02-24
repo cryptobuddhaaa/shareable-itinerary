@@ -18,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -279,7 +279,7 @@ private fun ExplorerLink(label: String, url: String, context: android.content.Co
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.OpenInNew, null, Modifier.size(14.dp), tint = ConvenuBlue)
+        Icon(Icons.AutoMirrored.Filled.OpenInNew, null, Modifier.size(14.dp), tint = ConvenuBlue)
         Spacer(Modifier.width(6.dp))
         Text(label, style = MaterialTheme.typography.bodySmall, color = ConvenuBlue)
     }

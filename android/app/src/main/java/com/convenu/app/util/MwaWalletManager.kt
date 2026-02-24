@@ -117,14 +117,11 @@ class MwaWalletManager @Inject constructor() {
                     val signatureBase58 = Base58.encode(signatureBytes)
 
                     // Also save as current connection
-                    val authToken = result.authResult.authToken
-                    if (authToken != null) {
-                        currentConnection = WalletConnection(
-                            publicKey = pubkeyBytes,
-                            publicKeyBase58 = walletAddress,
-                            authToken = authToken,
-                        )
-                    }
+                    currentConnection = WalletConnection(
+                        publicKey = pubkeyBytes,
+                        publicKeyBase58 = walletAddress,
+                        authToken = result.authResult.authToken,
+                    )
 
                     WalletResult.Success(
                         WalletAuthData(

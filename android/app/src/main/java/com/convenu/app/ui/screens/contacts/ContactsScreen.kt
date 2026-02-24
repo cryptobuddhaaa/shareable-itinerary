@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -103,7 +104,7 @@ fun ContactsScreen(
                         )
                         Box {
                             IconButton(onClick = { showSortMenu = true }) {
-                                Icon(Icons.Filled.Sort, "Sort")
+                                Icon(Icons.AutoMirrored.Filled.Sort, "Sort")
                             }
                             DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                                 ContactSortOption.entries.forEach { option ->

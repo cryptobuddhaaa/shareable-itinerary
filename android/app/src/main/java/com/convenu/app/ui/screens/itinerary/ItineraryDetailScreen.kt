@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,7 +45,7 @@ fun ItineraryDetailScreen(
             title = { Text(uiState.itinerary?.title ?: "Itinerary") },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Filled.ArrowBack, "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                 }
             },
             actions = {
@@ -403,7 +404,7 @@ fun EventFormDialog(
                         readOnly = true,
                         label = { Text("Event Type") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.Field),
                     )
                     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         eventTypes.forEach { type ->

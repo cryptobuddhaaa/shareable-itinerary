@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -171,7 +171,7 @@ fun LoginScreen(
             ),
         ) {
             Icon(
-                imageVector = Icons.Filled.Send,
+                imageVector = Icons.AutoMirrored.Filled.Send,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
             )
