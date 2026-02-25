@@ -31,7 +31,7 @@ interface ContactsListProps {
 }
 
 export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
-  const { contacts, getContactsByItinerary, deleteContact, updateContact } = useContacts();
+  const { contacts, getContactsByItinerary, deleteContact, updateContact, addNote } = useContacts();
   const { user } = useAuth();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
@@ -41,6 +41,12 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
     : itineraryId
     ? getContactsByItinerary(itineraryId)
     : contacts;
+
+  // Inline add-note state
+  const [addingNoteFor, setAddingNoteFor] = useState<string | null>(null);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [addingNoteLoading, setAddingNoteLoading] = useState(false);
+  const [noteCountByContact, setNoteCountByContact] = useState<Map<string, number>>(new Map());
 
   // Batch-fetch last 3 timestamped notes for all displayed contacts
   const [notesByContact, setNotesByContact] = useState<Map<string, ContactNote[]>>(new Map());
@@ -84,6 +90,57 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
     const ids = displayContacts.map((c) => c.id);
     fetchNotesForContacts(ids);
   }, [displayContacts, fetchNotesForContacts]);
+
+  const handleOpenAddNote = async (contactId: string) => {
+    if (addingNoteFor === contactId) {
+      setAddingNoteFor(null);
+      setNewNoteText('');
+      return;
+    }
+    setAddingNoteFor(contactId);
+    setNewNoteText('');
+
+    // Fetch total note count to enforce the 10-note limit
+    try {
+      const { count } = await supabase
+        .from('contact_notes')
+        .select('id', { count: 'exact', head: true })
+        .eq('contact_id', contactId);
+      setNoteCountByContact((prev) => new Map(prev).set(contactId, count ?? 0));
+    } catch {
+      // Fallback: allow the add, store will handle errors
+    }
+  };
+
+  const handleAddNote = async (contactId: string) => {
+    const text = newNoteText.trim();
+    if (!text) return;
+    const count = noteCountByContact.get(contactId) ?? 0;
+    if (count >= 10) {
+      toast.error('This contact already has 10 notes. Delete some in Edit to add more.');
+      return;
+    }
+
+    setAddingNoteLoading(true);
+    try {
+      const note = await addNote(contactId, text);
+      // Update the preview list (keep max 3, newest first)
+      setNotesByContact((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(contactId) || [];
+        updated.set(contactId, [note, ...existing].slice(0, 3));
+        return updated;
+      });
+      setNoteCountByContact((prev) => new Map(prev).set(contactId, (prev.get(contactId) ?? 0) + 1));
+      setAddingNoteFor(null);
+      setNewNoteText('');
+      toast.success('Note added');
+    } catch {
+      toast.error('Failed to add note');
+    } finally {
+      setAddingNoteLoading(false);
+    }
+  };
 
   const handleToggleContacted = async (contact: Contact) => {
     try {
@@ -295,6 +352,64 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                     );
                   })}
                 </div>
+              )}
+
+              {/* Inline add note */}
+              {addingNoteFor === contact.id ? (
+                <div className="mt-2 flex gap-1.5">
+                  <input
+                    type="text"
+                    value={newNoteText}
+                    onChange={(e) => setNewNoteText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddNote(contact.id);
+                      } else if (e.key === 'Escape') {
+                        setAddingNoteFor(null);
+                        setNewNoteText('');
+                      }
+                    }}
+                    placeholder={
+                      (noteCountByContact.get(contact.id) ?? 0) >= 10
+                        ? 'Limit reached (10 notes)'
+                        : 'Add a note...'
+                    }
+                    maxLength={200}
+                    disabled={addingNoteLoading || (noteCountByContact.get(contact.id) ?? 0) >= 10}
+                    autoFocus
+                    className="flex-1 px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddNote(contact.id)}
+                    disabled={!newNoteText.trim() || addingNoteLoading || (noteCountByContact.get(contact.id) ?? 0) >= 10}
+                    className="px-1.5 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
+                  >
+                    {addingNoteLoading ? '...' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAddingNoteFor(null); setNewNoteText(''); }}
+                    className="text-slate-400 hover:text-slate-200 flex-shrink-0 p-1"
+                    aria-label="Cancel"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddNote(contact.id)}
+                  className="mt-2 text-xs text-slate-500 hover:text-blue-400 flex items-center gap-1 transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add note
+                </button>
               )}
 
               {contact.lastContactedAt && (
