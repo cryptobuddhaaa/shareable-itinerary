@@ -1,14 +1,22 @@
 package com.convenu.app.util
 
 import android.net.Uri
+import com.convenu.app.BuildConfig
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import com.solana.mobilewalletadapter.clientlib.TransactionResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import timber.log.Timber
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,6 +39,8 @@ data class WalletAuthData(
     val walletAddress: String,
     val message: String,
     val signatureBase58: String,
+    /** Base58-encoded transaction message bytes for backend signature verification. */
+    val txMessage: String,
 )
 
 sealed class WalletResult<out T> {
@@ -99,33 +109,54 @@ class MwaWalletManager @Inject constructor() {
      * Authorize AND sign a login message in a single wallet interaction.
      * Returns everything needed to authenticate with the server.
      *
+     * Uses signTransactions with a Memo instruction instead of signMessagesDetached,
+     * because sign_messages is optional in MWA and not supported by Seeker/SeedVault.
      * Uses NonCancellable to prevent the outer coroutine scope from cancelling the
-     * MWA session during wallet user interaction (fixes "Local association was
-     * cancelled before connected" on Seeker/SeedVault devices).
+     * MWA session during wallet user interaction.
      * Retries once on cancellation as a fallback.
      */
     suspend fun authorizeAndSign(sender: ActivityResultSender): WalletResult<WalletAuthData> {
         val timestamp = System.currentTimeMillis()
         val loginMessage = "Sign in to Convenu with this wallet. Timestamp: $timestamp"
 
+        // Fetch latest blockhash so the wallet accepts the transaction
+        val blockhash = try {
+            fetchLatestBlockhash()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to fetch blockhash")
+            return WalletResult.Error("Network error: could not reach Solana. Please try again.")
+        }
+
         for (attempt in 1..MAX_TRANSACT_ATTEMPTS) {
             try {
                 val result = withContext(NonCancellable) {
                     mwa.transact(sender) { authResult ->
                         val pubkey = authResult.accounts.first().publicKey
-                        val signResult = signMessagesDetached(
-                            messages = arrayOf(loginMessage.toByteArray()),
-                            addresses = arrayOf(pubkey),
+
+                        // Build a memo transaction containing the login message
+                        val unsignedTx = buildMemoTransaction(
+                            walletPubkey = pubkey,
+                            blockhash = blockhash,
+                            memoData = loginMessage.toByteArray(Charsets.UTF_8),
                         )
-                        Pair(pubkey, signResult.messages.first().signatures.first())
+
+                        @Suppress("DEPRECATION")
+                        val signResult = signTransactions(
+                            transactions = arrayOf(unsignedTx),
+                        )
+
+                        Pair(pubkey, signResult.signedPayloads.first())
                     }
                 }
 
                 when (result) {
                     is TransactionResult.Success -> {
-                        val (pubkeyBytes, signatureBytes) = result.payload
+                        val (pubkeyBytes, signedTxBytes) = result.payload
                         val walletAddress = Base58.encode(pubkeyBytes)
-                        val signatureBase58 = Base58.encode(signatureBytes)
+
+                        // Signed transaction layout: [01][64-byte signature][message bytes...]
+                        val signatureBytes = signedTxBytes.copyOfRange(1, 65)
+                        val txMessageBytes = signedTxBytes.copyOfRange(65, signedTxBytes.size)
 
                         currentConnection = WalletConnection(
                             publicKey = pubkeyBytes,
@@ -137,7 +168,8 @@ class MwaWalletManager @Inject constructor() {
                             WalletAuthData(
                                 walletAddress = walletAddress,
                                 message = loginMessage,
-                                signatureBase58 = signatureBase58,
+                                signatureBase58 = Base58.encode(signatureBytes),
+                                txMessage = Base58.encode(txMessageBytes),
                             ),
                         )
                     }
@@ -248,8 +280,110 @@ class MwaWalletManager @Inject constructor() {
         currentConnection = null
     }
 
+    // ---- Private helpers ----
+
+    /**
+     * Build an unsigned Solana transaction with a single Memo v1 instruction.
+     * The wallet will sign this via signTransactions (required MWA method),
+     * unlike signMessagesDetached which is optional and unsupported on Seeker.
+     */
+    private fun buildMemoTransaction(
+        walletPubkey: ByteArray,
+        blockhash: ByteArray,
+        memoData: ByteArray,
+    ): ByteArray {
+        require(walletPubkey.size == 32) { "Wallet pubkey must be 32 bytes" }
+        require(blockhash.size == 32) { "Blockhash must be 32 bytes" }
+
+        // Build the transaction message
+        val parts = mutableListOf<ByteArray>()
+
+        // Header: [num_required_sigs, num_readonly_signed, num_readonly_unsigned]
+        parts.add(byteArrayOf(1, 0, 1))
+        // Account keys: [wallet_pubkey, memo_program_v1_id]
+        parts.add(encodeCompactU16(2))
+        parts.add(walletPubkey)
+        parts.add(MEMO_PROGRAM_V1_ID)
+        // Recent blockhash
+        parts.add(blockhash)
+        // Instructions: 1 instruction
+        parts.add(encodeCompactU16(1))
+        // Memo instruction: program_id_index=1, no accounts, data=memoData
+        parts.add(byteArrayOf(1)) // program_id_index
+        parts.add(encodeCompactU16(0)) // num_accounts
+        parts.add(encodeCompactU16(memoData.size)) // data_length
+        parts.add(memoData) // data
+
+        val messageSize = parts.sumOf { it.size }
+        val message = ByteArray(messageSize)
+        var offset = 0
+        for (part in parts) {
+            System.arraycopy(part, 0, message, offset, part.size)
+            offset += part.size
+        }
+
+        // Full unsigned transaction: [compact(1)][64 zero bytes for signature][message]
+        val unsignedTx = ByteArray(1 + 64 + message.size)
+        unsignedTx[0] = 1 // compact_u16: 1 signature
+        // Bytes 1..64 are zero (empty signature placeholder)
+        System.arraycopy(message, 0, unsignedTx, 65, message.size)
+
+        return unsignedTx
+    }
+
+    /** Fetch the latest blockhash from the Solana RPC. */
+    private suspend fun fetchLatestBlockhash(): ByteArray {
+        return withContext(Dispatchers.IO) {
+            val rpcUrl = BuildConfig.SOLANA_RPC_URL
+            val url = URL(rpcUrl)
+            val connection = url.openConnection() as HttpURLConnection
+            try {
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 10_000
+                connection.doOutput = true
+
+                val body =
+                    """{"jsonrpc":"2.0","id":1,"method":"getLatestBlockhash","params":[{"commitment":"finalized"}]}"""
+                connection.outputStream.use { os ->
+                    OutputStreamWriter(os, Charsets.UTF_8).use { it.write(body) }
+                }
+
+                val response = connection.inputStream.bufferedReader(Charsets.UTF_8).readText()
+                val json = Json { ignoreUnknownKeys = true }
+                val root = json.parseToJsonElement(response).jsonObject
+                val blockhashStr = root["result"]!!
+                    .jsonObject["value"]!!
+                    .jsonObject["blockhash"]!!
+                    .jsonPrimitive.content
+                Base58.decode(blockhashStr)
+            } finally {
+                connection.disconnect()
+            }
+        }
+    }
+
+    /** Solana compact-u16 encoding for small values. */
+    private fun encodeCompactU16(value: Int): ByteArray {
+        if (value < 0x80) return byteArrayOf(value.toByte())
+        if (value < 0x4000) return byteArrayOf(
+            ((value and 0x7f) or 0x80).toByte(),
+            ((value shr 7) and 0x7f).toByte(),
+        )
+        return byteArrayOf(
+            ((value and 0x7f) or 0x80).toByte(),
+            (((value shr 7) and 0x7f) or 0x80).toByte(),
+            ((value shr 14) and 0x03).toByte(),
+        )
+    }
+
     companion object {
         private const val MAX_TRANSACT_ATTEMPTS = 2
         private const val RETRY_DELAY_MS = 1000L
+
+        /** Memo Program v1 — no account requirements in instruction data. */
+        private val MEMO_PROGRAM_V1_ID =
+            Base58.decode("Memo1UhkJBfCVP4kyu4UhFNhVv7Y9JkXm5J1RW7Z9DX")
     }
 }

@@ -23,7 +23,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
  * Wallet-based authentication: verify signature, find or create user, return token_hash.
  */
 async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
-  const { wallet_address, signature, message } = req.body || {};
+  const { wallet_address, signature, message, tx_message } = req.body || {};
 
   if (!wallet_address || !signature || !message) {
     return res.status(400).json({ error: 'Missing wallet_address, signature, or message' });
@@ -40,7 +40,6 @@ async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
   }
 
   // 2. Verify the signature
-  const messageBytes = new TextEncoder().encode(message);
   let signatureBytes: Uint8Array;
   try {
     signatureBytes = bs58.decode(signature);
@@ -48,7 +47,24 @@ async function handleWalletAuth(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid signature encoding' });
   }
 
-  const isValid = nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
+  let isValid: boolean;
+  if (tx_message) {
+    // Transaction-based signing: verify signature against serialized transaction message bytes.
+    // Used by Android app with MWA signTransactions (sign_messages is optional in MWA spec
+    // and not supported by Seeker/SeedVault).
+    let txMessageBytes: Uint8Array;
+    try {
+      txMessageBytes = bs58.decode(tx_message);
+    } catch {
+      return res.status(400).json({ error: 'Invalid tx_message encoding' });
+    }
+    isValid = nacl.sign.detached.verify(txMessageBytes, signatureBytes, publicKeyBytes);
+  } else {
+    // Direct message signing: verify signature against the UTF-8 message text.
+    const messageBytes = new TextEncoder().encode(message);
+    isValid = nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
+  }
+
   if (!isValid) {
     return res.status(401).json({ error: 'Invalid signature' });
   }

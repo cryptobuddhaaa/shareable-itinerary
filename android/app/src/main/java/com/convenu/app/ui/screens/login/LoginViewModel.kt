@@ -60,6 +60,7 @@ class LoginViewModel @Inject constructor(
                         walletAddress = authData.walletAddress,
                         signature = authData.signatureBase58,
                         message = authData.message,
+                        txMessage = authData.txMessage,
                     )
                     result.onSuccess {
                         _uiState.value = _uiState.value.copy(

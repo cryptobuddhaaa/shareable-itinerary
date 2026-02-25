@@ -66,6 +66,7 @@ data class WalletAuthRequest(
     @SerialName("wallet_address") val walletAddress: String,
     val signature: String,
     val message: String,
+    @SerialName("tx_message") val txMessage: String? = null,
 )
 
 @Serializable

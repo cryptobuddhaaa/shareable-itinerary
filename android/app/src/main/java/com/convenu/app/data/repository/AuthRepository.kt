@@ -146,6 +146,7 @@ class AuthRepository @Inject constructor(
         walletAddress: String,
         signature: String,
         message: String,
+        txMessage: String? = null,
     ): Result<String> {
         return try {
             val response = api.authWallet(
@@ -153,6 +154,7 @@ class AuthRepository @Inject constructor(
                     walletAddress = walletAddress,
                     signature = signature,
                     message = message,
+                    txMessage = txMessage,
                 ),
             )
 
