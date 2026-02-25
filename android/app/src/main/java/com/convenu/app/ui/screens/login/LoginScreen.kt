@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.convenu.app.LocalActivityResultSender
+import com.convenu.app.ui.components.WalletPickerBottomSheet
 
 @Composable
 fun LoginScreen(
@@ -83,7 +84,7 @@ fun LoginScreen(
 
         // Primary: Connect Wallet
         Button(
-            onClick = { viewModel.loginWithWallet(sender) },
+            onClick = { viewModel.showWalletPicker() },
             modifier = Modifier.fillMaxWidth(),
             enabled = !uiState.isLoading,
         ) {
@@ -168,5 +169,15 @@ fun LoginScreen(
                 )
             }
         }
+    }
+
+    // Wallet picker bottom sheet
+    if (uiState.showWalletPicker) {
+        WalletPickerBottomSheet(
+            onWalletSelected = { wallet ->
+                viewModel.loginWithWallet(sender, wallet)
+            },
+            onDismiss = { viewModel.dismissWalletPicker() },
+        )
     }
 }

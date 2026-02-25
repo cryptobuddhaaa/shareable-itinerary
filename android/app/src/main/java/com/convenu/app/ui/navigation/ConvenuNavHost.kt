@@ -113,10 +113,7 @@ fun ConvenuNavHost() {
             }
 
             composable(Routes.WALLET) {
-                WalletScreen(
-                    onConnect = {},
-                    onVerify = {},
-                )
+                WalletScreen()
             }
 
             composable(Routes.ITINERARIES) {

@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.convenu.app.BuildConfig
 import com.convenu.app.data.repository.AuthRepository
 import com.convenu.app.util.MwaWalletManager
+import com.convenu.app.util.WalletOption
 import com.convenu.app.util.WalletResult
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -28,6 +29,7 @@ data class LoginUiState(
     val isLoggedIn: Boolean = false,
     val error: String? = null,
     val loadingMethod: LoginMethod? = null,
+    val showWalletPicker: Boolean = false,
 )
 
 enum class LoginMethod { WALLET, GOOGLE, TELEGRAM }
@@ -41,19 +43,29 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
+    fun showWalletPicker() {
+        if (_uiState.value.isLoading) return
+        _uiState.value = _uiState.value.copy(showWalletPicker = true, error = null)
+    }
+
+    fun dismissWalletPicker() {
+        _uiState.value = _uiState.value.copy(showWalletPicker = false)
+    }
+
     /**
      * Wallet login: authorize + sign message in single MWA interaction,
      * then exchange signed message with server for a session.
      */
-    fun loginWithWallet(sender: ActivityResultSender) {
+    fun loginWithWallet(sender: ActivityResultSender, wallet: WalletOption) {
         if (_uiState.value.isLoading) return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoading = true, error = null, loadingMethod = LoginMethod.WALLET,
+                showWalletPicker = false,
             )
 
-            when (val walletResult = walletManager.authorizeAndSign(sender)) {
+            when (val walletResult = walletManager.authorizeAndSign(sender, wallet)) {
                 is WalletResult.Success -> {
                     val authData = walletResult.data
                     val result = authRepository.authWithWallet(

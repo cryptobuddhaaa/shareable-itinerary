@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.convenu.app.data.repository.WalletRepository
 import com.convenu.app.util.Base58
 import com.convenu.app.util.MwaWalletManager
+import com.convenu.app.util.WalletOption
 import com.convenu.app.util.WalletResult
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +22,7 @@ data class WalletUiState(
     val isVerifying: Boolean = false,
     val isVerified: Boolean = false,
     val error: String? = null,
+    val showWalletPicker: Boolean = false,
 )
 
 @HiltViewModel
@@ -32,13 +34,24 @@ class WalletViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(WalletUiState())
     val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
 
-    fun connectWallet(sender: ActivityResultSender) {
+    fun showWalletPicker() {
+        if (_uiState.value.isConnecting) return
+        _uiState.value = _uiState.value.copy(showWalletPicker = true, error = null)
+    }
+
+    fun dismissWalletPicker() {
+        _uiState.value = _uiState.value.copy(showWalletPicker = false)
+    }
+
+    fun connectWallet(sender: ActivityResultSender, wallet: WalletOption) {
         if (_uiState.value.isConnecting) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isConnecting = true, error = null)
+            _uiState.value = _uiState.value.copy(
+                isConnecting = true, error = null, showWalletPicker = false,
+            )
 
-            when (val result = walletManager.authorize(sender)) {
+            when (val result = walletManager.authorize(sender, wallet)) {
                 is WalletResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         walletAddress = result.data.publicKeyBase58,

@@ -1,5 +1,7 @@
 package com.convenu.app.util
 
+import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import com.convenu.app.BuildConfig
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
@@ -19,6 +21,59 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Wallet apps supported by Convenu. */
+enum class WalletOption(
+    val displayName: String,
+    val description: String,
+    val packageName: String,
+    /** HTTPS URI base for targeting this wallet via MWA deep link. Null = default solana-wallet: scheme. */
+    val walletUriBase: Uri?,
+    val playStoreUri: String?,
+) {
+    SEED_VAULT(
+        displayName = "Seed Vault",
+        description = "Built-in wallet on Seeker devices",
+        packageName = "com.solanamobile.seedvault",
+        walletUriBase = null,
+        playStoreUri = null,
+    ),
+    PHANTOM(
+        displayName = "Phantom",
+        description = "Popular Solana wallet",
+        packageName = "app.phantom",
+        walletUriBase = Uri.parse("https://phantom.app"),
+        playStoreUri = "https://play.google.com/store/apps/details?id=app.phantom",
+    ),
+    SOLFLARE(
+        displayName = "Solflare",
+        description = "Solana wallet with DeFi features",
+        packageName = "com.solflare.mobile",
+        walletUriBase = Uri.parse("https://solflare.com"),
+        playStoreUri = "https://play.google.com/store/apps/details?id=com.solflare.mobile",
+    );
+
+    fun isInstalled(context: Context): Boolean {
+        // SeedVault is detected by checking if any app handles the solana-wallet: scheme
+        if (this == SEED_VAULT) {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                Uri.parse("solana-wallet:/"),
+            ).addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+            val resolved = context.packageManager.resolveActivity(
+                intent, PackageManager.MATCH_DEFAULT_ONLY,
+            )
+            return resolved != null
+        }
+        return try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+}
 
 data class WalletConnection(
     val publicKey: ByteArray,
@@ -64,8 +119,12 @@ class MwaWalletManager @Inject constructor() {
     var currentConnection: WalletConnection? = null
         private set
 
-    suspend fun authorize(sender: ActivityResultSender): WalletResult<WalletConnection> {
+    suspend fun authorize(
+        sender: ActivityResultSender,
+        wallet: WalletOption? = null,
+    ): WalletResult<WalletConnection> {
         return try {
+            setWalletTarget(wallet)
             val result = mwa.transact(sender) { authResult ->
                 authResult
             }
@@ -115,7 +174,10 @@ class MwaWalletManager @Inject constructor() {
      * MWA session during wallet user interaction.
      * Retries once on cancellation as a fallback.
      */
-    suspend fun authorizeAndSign(sender: ActivityResultSender): WalletResult<WalletAuthData> {
+    suspend fun authorizeAndSign(
+        sender: ActivityResultSender,
+        wallet: WalletOption? = null,
+    ): WalletResult<WalletAuthData> {
         val timestamp = System.currentTimeMillis()
         val loginMessage = "Sign in to Convenu with this wallet. Timestamp: $timestamp"
 
@@ -126,6 +188,8 @@ class MwaWalletManager @Inject constructor() {
             Timber.e(e, "Failed to fetch blockhash")
             return WalletResult.Error("Network error: could not reach Solana. Please try again.")
         }
+
+        setWalletTarget(wallet)
 
         for (attempt in 1..MAX_TRANSACT_ATTEMPTS) {
             try {
@@ -281,6 +345,20 @@ class MwaWalletManager @Inject constructor() {
     }
 
     // ---- Private helpers ----
+
+    /**
+     * Set the wallet URI base on the MWA instance via reflection to target a specific wallet app.
+     * When [wallet] is null or has no URI base, clears it so MWA uses the default solana-wallet: scheme.
+     */
+    private fun setWalletTarget(wallet: WalletOption?) {
+        try {
+            val field = MobileWalletAdapter::class.java.getDeclaredField("walletUriBase")
+            field.isAccessible = true
+            field.set(mwa, wallet?.walletUriBase)
+        } catch (e: Exception) {
+            Timber.w(e, "Could not set wallet target for ${wallet?.displayName}")
+        }
+    }
 
     /**
      * Build an unsigned Solana transaction with a single Memo v1 instruction.

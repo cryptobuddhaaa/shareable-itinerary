@@ -31,16 +31,17 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.convenu.app.LocalActivityResultSender
+import com.convenu.app.ui.components.WalletPickerBottomSheet
 import com.convenu.app.ui.theme.ConvenuGreen
 
 @Composable
 fun WalletScreen(
-    onConnect: () -> Unit,
-    onVerify: () -> Unit,
     viewModel: WalletViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val clipboardManager = LocalClipboardManager.current
+    val sender = LocalActivityResultSender.current
 
     Column(
         modifier = Modifier
@@ -118,7 +119,7 @@ fun WalletScreen(
                 )
             } else {
                 Button(
-                    onClick = onVerify,
+                    onClick = { viewModel.verifyWallet(sender) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isVerifying,
                 ) {
@@ -163,7 +164,7 @@ fun WalletScreen(
             Spacer(Modifier.height(24.dp))
 
             Button(
-                onClick = onConnect,
+                onClick = { viewModel.showWalletPicker() },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isConnecting,
             ) {
@@ -201,6 +202,16 @@ fun WalletScreen(
                 )
             }
         }
+    }
+
+    // Wallet picker bottom sheet
+    if (uiState.showWalletPicker) {
+        WalletPickerBottomSheet(
+            onWalletSelected = { wallet ->
+                viewModel.connectWallet(sender, wallet)
+            },
+            onDismiss = { viewModel.dismissWalletPicker() },
+        )
     }
 }
 
