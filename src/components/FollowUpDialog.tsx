@@ -5,11 +5,13 @@ import { toast } from './Toast';
 import { isTelegramWebApp, openTelegramLink } from '../lib/telegram';
 import type { Contact } from '../models/types';
 
-interface InviteDialogProps {
+interface FollowUpDialogProps {
   onClose: () => void;
 }
 
-type Step = 'select' | 'compose' | 'send';
+type Step = 'select' | 'compose' | 'send' | 'create-template';
+
+type DateFilter = 'all' | 'today' | 'yesterday' | 'this-week' | 'this-month' | 'last-30' | 'custom';
 
 // --- Pre-set templates ---
 interface MessageTemplate {
@@ -75,12 +77,79 @@ function personalizeMessage(template: string, contact: Contact): string {
     .replace(/\{eventMention\}/g, eventMention);
 }
 
-export default function InviteDialog({ onClose }: InviteDialogProps) {
+/** Compute date range from a preset filter. */
+function getDateRange(
+  filter: DateFilter,
+  customFrom: string,
+  customTo: string
+): { from?: string; to?: string } {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  switch (filter) {
+    case 'all':
+      return {};
+    case 'today':
+      return { from: todayStr, to: todayStr };
+    case 'yesterday': {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return { from: y.toISOString().split('T')[0], to: y.toISOString().split('T')[0] };
+    }
+    case 'this-week': {
+      const startOfWeek = new Date(today);
+      const day = startOfWeek.getDay();
+      // Monday-based week start
+      startOfWeek.setDate(startOfWeek.getDate() - (day === 0 ? 6 : day - 1));
+      return { from: startOfWeek.toISOString().split('T')[0], to: todayStr };
+    }
+    case 'this-month': {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: startOfMonth.toISOString().split('T')[0], to: todayStr };
+    }
+    case 'last-30': {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 30);
+      return { from: d.toISOString().split('T')[0], to: todayStr };
+    }
+    case 'custom':
+      return { from: customFrom || undefined, to: customTo || undefined };
+  }
+}
+
+/** Copy text to clipboard with fallback for Telegram WebView. */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch { /* Clipboard API not available in this webview */ }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    if (ok) return true;
+  } catch { /* execCommand not supported */ }
+  return false;
+}
+
+const VARIABLE_CHIPS = ['{firstName}', '{lastName}', '{fullName}', '{company}', '{eventTitle}', '{eventMention}'];
+
+export default function FollowUpDialog({ onClose }: FollowUpDialogProps) {
   const { contacts, updateContact } = useContacts();
   const { itineraries } = useItinerary();
 
   const [step, setStep] = useState<Step>('select');
   const [filterItineraryId, setFilterItineraryId] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [template, setTemplate] = useState(BUILTIN_TEMPLATES[0].body);
   const [activeTemplateId, setActiveTemplateId] = useState<string>(BUILTIN_TEMPLATES[0].id);
@@ -103,14 +172,23 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Only contacts with telegram handles
+  // Only contacts with telegram handles, filtered by trip and date
   const eligibleContacts = useMemo(() => {
     let filtered = contacts.filter((c) => c.telegramHandle);
     if (filterItineraryId !== 'all') {
       filtered = filtered.filter((c) => c.itineraryId === filterItineraryId);
     }
+    const { from, to } = getDateRange(dateFilter, customDateFrom, customDateTo);
+    if (from || to) {
+      filtered = filtered.filter((c) => {
+        if (!c.dateMet) return false;
+        if (from && c.dateMet < from) return false;
+        if (to && c.dateMet > to) return false;
+        return true;
+      });
+    }
     return filtered;
-  }, [contacts, filterItineraryId]);
+  }, [contacts, filterItineraryId, dateFilter, customDateFrom, customDateTo]);
 
   const selectedContacts = useMemo(
     () => contacts.filter((c) => selectedIds.has(c.id)),
@@ -162,6 +240,7 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
     saveCustomTemplates(updated);
     setEditingCustom(null);
     selectTemplate(newTemplate);
+    setStep('compose');
     toast.success('Template saved');
   };
 
@@ -179,11 +258,13 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
 
   const handleCopyAndOpen = async () => {
     if (!currentContact) return;
-    try {
-      await navigator.clipboard.writeText(currentMessage);
+
+    const copied = await copyToClipboard(currentMessage);
+    if (copied) {
       toast.info('Message copied to clipboard');
-    } catch {
+    } else {
       toast.error('Failed to copy. Please copy the message manually.');
+      return;
     }
 
     const handle = currentContact.telegramHandle?.replace('@', '');
@@ -229,6 +310,7 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
           <h2 className="text-lg font-semibold text-white">
             {step === 'select' && 'Select Contacts'}
             {step === 'compose' && 'Compose Message'}
+            {step === 'create-template' && 'New Template'}
             {step === 'send' && `Sending ${sendIndex + 1}/${selectedContacts.length}`}
           </h2>
           <button
@@ -265,6 +347,55 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
                   </select>
                 </div>
               )}
+
+              {/* Filter by date */}
+              <div className="mb-4">
+                <label className="block text-sm text-slate-400 mb-1">Filter by date met</label>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => {
+                    setDateFilter(e.target.value as DateFilter);
+                    setSelectedIds(new Set());
+                  }}
+                  className="block w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All dates</option>
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="this-week">This week</option>
+                  <option value="this-month">This month</option>
+                  <option value="last-30">Last 30 days</option>
+                  <option value="custom">Custom range...</option>
+                </select>
+                {dateFilter === 'custom' && (
+                  <div className="flex gap-2 mt-2">
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-500 mb-0.5">From</label>
+                      <input
+                        type="date"
+                        value={customDateFrom}
+                        onChange={(e) => {
+                          setCustomDateFrom(e.target.value);
+                          setSelectedIds(new Set());
+                        }}
+                        className="block w-full px-2 py-1.5 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-500 mb-0.5">To</label>
+                      <input
+                        type="date"
+                        value={customDateTo}
+                        onChange={(e) => {
+                          setCustomDateTo(e.target.value);
+                          setSelectedIds(new Set());
+                        }}
+                        className="block w-full px-2 py-1.5 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {eligibleContacts.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-8">
@@ -350,9 +481,12 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
                     )}
                   </button>
                 ))}
-                {customTemplates.length < MAX_CUSTOM_TEMPLATES && !editingCustom && (
+                {customTemplates.length < MAX_CUSTOM_TEMPLATES && (
                   <button
-                    onClick={() => setEditingCustom({ name: '', body: '' })}
+                    onClick={() => {
+                      setEditingCustom({ name: '', body: '' });
+                      setStep('create-template');
+                    }}
                     className="px-2.5 py-1 text-xs rounded-full border border-dashed border-slate-500 text-slate-400 hover:text-blue-400 hover:border-blue-500 transition-colors"
                   >
                     + Custom
@@ -360,47 +494,12 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
                 )}
               </div>
 
-              {/* Save custom template form */}
-              {editingCustom && (
-                <div className="mb-3 p-3 border border-blue-700/50 bg-blue-900/10 rounded-md space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Template name"
-                    value={editingCustom.name}
-                    onChange={(e) => setEditingCustom({ ...editingCustom, name: e.target.value })}
-                    maxLength={30}
-                    className="block w-full px-3 py-1.5 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <textarea
-                    placeholder="Message body (use {firstName}, {company}, etc.)"
-                    value={editingCustom.body}
-                    onChange={(e) => setEditingCustom({ ...editingCustom, body: e.target.value })}
-                    rows={3}
-                    className="block w-full px-3 py-1.5 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      onClick={() => setEditingCustom(null)}
-                      className="px-2 py-1 text-xs text-slate-400 hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveCustomTemplate}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                    >
-                      Save Template
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Variable chips */}
               <p className="text-sm text-slate-400 mb-2">
                 Edit your message. Available variables:
               </p>
               <div className="flex flex-wrap gap-1 mb-3">
-                {['{firstName}', '{lastName}', '{fullName}', '{company}', '{eventTitle}', '{eventMention}'].map((v) => (
+                {VARIABLE_CHIPS.map((v) => (
                   <button
                     key={v}
                     onClick={() => setTemplate((t) => t + v)}
@@ -421,6 +520,53 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
                   <p className="text-xs text-slate-400 mb-1">Preview (for {selectedContacts[0].firstName}):</p>
                   <div className="p-3 bg-slate-900 rounded text-sm text-slate-300 whitespace-pre-wrap">
                     {personalizeMessage(template, selectedContacts[0])}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'create-template' && (
+            <div>
+              <p className="text-sm text-slate-400 mb-3">
+                Create a reusable message template. Use variables to personalize for each contact.
+              </p>
+
+              <label className="block text-sm text-slate-400 mb-1">Template name</label>
+              <input
+                type="text"
+                placeholder="e.g., Coffee invite"
+                value={editingCustom?.name || ''}
+                onChange={(e) => setEditingCustom((prev) => prev ? { ...prev, name: e.target.value } : { name: e.target.value, body: '' })}
+                maxLength={30}
+                className="block w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              />
+
+              <label className="block text-sm text-slate-400 mb-1">Message body</label>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {VARIABLE_CHIPS.map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setEditingCustom((prev) => prev ? { ...prev, body: prev.body + v } : { name: '', body: v })}
+                    className="px-2 py-0.5 text-xs bg-slate-700 text-blue-400 rounded border border-slate-600 hover:bg-slate-600"
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                placeholder="Write your template message..."
+                value={editingCustom?.body || ''}
+                onChange={(e) => setEditingCustom((prev) => prev ? { ...prev, body: e.target.value } : { name: '', body: e.target.value })}
+                rows={6}
+                className="block w-full px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+
+              {editingCustom?.body && selectedContacts.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs text-slate-400 mb-1">Preview (for {selectedContacts[0].firstName}):</p>
+                  <div className="p-3 bg-slate-900 rounded text-sm text-slate-300 whitespace-pre-wrap">
+                    {personalizeMessage(editingCustom.body, selectedContacts[0])}
                   </div>
                 </div>
               )}
@@ -489,10 +635,18 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
         {step !== 'send' && (
           <div className="flex justify-between p-4 border-t border-slate-700">
             <button
-              onClick={step === 'select' ? onClose : () => setStep('select')}
+              onClick={() => {
+                if (step === 'select') onClose();
+                else if (step === 'create-template') {
+                  setEditingCustom(null);
+                  setStep('compose');
+                } else {
+                  setStep('select');
+                }
+              }}
               className="px-3 py-1.5 text-sm text-slate-300 hover:text-white"
             >
-              {step === 'select' ? 'Cancel' : 'Back'}
+              {step === 'select' ? 'Cancel' : step === 'create-template' ? 'Cancel' : 'Back'}
             </button>
             <button
               onClick={() => {
@@ -509,12 +663,21 @@ export default function InviteDialog({ onClose }: InviteDialogProps) {
                   }
                   setSendIndex(0);
                   setStep('send');
+                } else if (step === 'create-template') {
+                  handleSaveCustomTemplate();
                 }
               }}
               className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
-              disabled={step === 'select' && selectedIds.size === 0}
+              disabled={
+                (step === 'select' && selectedIds.size === 0) ||
+                (step === 'create-template' && (!editingCustom?.name?.trim() || !editingCustom?.body?.trim()))
+              }
             >
-              {step === 'select' ? `Next (${selectedIds.size} selected)` : 'Start Sending'}
+              {step === 'select'
+                ? `Next (${selectedIds.size} selected)`
+                : step === 'create-template'
+                ? 'Save Template'
+                : 'Start Sending'}
             </button>
           </div>
         )}

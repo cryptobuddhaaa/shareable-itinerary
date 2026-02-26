@@ -5,7 +5,7 @@ import { useEnrichment } from '../hooks/useEnrichment';
 import { useAuth } from '../hooks/useAuth';
 import ContactsList from './ContactsList';
 import ContactForm from './ContactForm';
-import InviteDialog from './InviteDialog';
+import FollowUpDialog from './FollowUpDialog';
 import { toast } from './Toast';
 import { isTelegramWebApp, openTelegramLink } from '../lib/telegram';
 import {
@@ -36,7 +36,7 @@ export default function ContactsPage() {
   const [telegramUsername, setTelegramUsername] = useState<string>();
   const [linkLoading, setLinkLoading] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
-  const [showInvite, setShowInvite] = useState(false);
+  const [showFollowUp, setShowFollowUp] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
   const [newTagName, setNewTagName] = useState('');
 
@@ -49,7 +49,7 @@ export default function ContactsPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'n' && !showAddContact && !showInvite) {
+      if (e.key === 'n' && !showAddContact && !showFollowUp) {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
@@ -58,7 +58,7 @@ export default function ContactsPage() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showAddContact, showInvite]);
+  }, [showAddContact, showFollowUp]);
 
   const handleLinkTelegram = async () => {
     setLinkLoading(true);
@@ -259,13 +259,13 @@ export default function ContactsPage() {
           {contacts.length > 0 && (
             <>
               <button
-                onClick={() => setShowInvite(true)}
+                onClick={() => setShowFollowUp(true)}
                 className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-green-500"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                Invite
+                Follow-Up
               </button>
               <button
                 onClick={exportToCSV}
@@ -496,8 +496,8 @@ export default function ContactsPage() {
         <ContactForm onClose={() => setShowAddContact(false)} />
       )}
 
-      {showInvite && (
-        <InviteDialog onClose={() => setShowInvite(false)} />
+      {showFollowUp && (
+        <FollowUpDialog onClose={() => setShowFollowUp(false)} />
       )}
     </div>
   );
