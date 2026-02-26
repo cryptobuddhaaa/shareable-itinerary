@@ -1,10 +1,11 @@
-// /contacts, /itineraries, /today — read-only viewing flows
+// /contacts, /itineraries, /today — viewing flows + edit/delete contacts
 
 import { supabase, WEBAPP_URL } from '../_lib/config.js';
 import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
-import { getLinkedUserId } from '../_lib/state.js';
+import { getLinkedUserId, setState, clearState } from '../_lib/state.js';
 import { escapeHtml, isSafeUrl, sanitizeHandle, getTimeAgo } from '../_lib/utils.js';
-import type { ParsedEvent } from '../_lib/types.js';
+import type { BotState, ParsedEvent } from '../_lib/types.js';
+import { FIELD_FLOW } from './contact.js';
 
 export async function handleItineraries(chatId: number, telegramUserId: number) {
   const userId = await getLinkedUserId(telegramUserId);
@@ -541,16 +542,320 @@ async function showContactsList(
     message += '\n';
   }
 
-  message += 'Tap a username to open their DM.\n';
-  message += 'Use <code>/contacted @handle</code> to mark as contacted.';
+  message += 'Tap a contact below to view, edit, or delete:';
 
+  // Per-contact selection buttons (max 20 to stay within Telegram limits)
+  const keyboard: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>> = [];
+  for (const c of contacts.slice(0, 20)) {
+    const name = `${c.first_name} ${c.last_name || ''}`.trim();
+    const company = c.project_company ? ` — ${c.project_company}` : '';
+    keyboard.push([{
+      text: `👤 ${name}${company}`.substring(0, 60),
+      callback_data: `cv:${c.id}`,
+    }]);
+  }
+  keyboard.push([{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }]);
+
+  await sendMessage(chatId, message, {
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+// --- Contact detail view & edit/delete ---
+
+const FIELD_COLUMN_MAP: Record<string, string> = {
+  telegramHandle: 'telegram_handle',
+  firstName: 'first_name',
+  lastName: 'last_name',
+  projectCompany: 'project_company',
+  position: 'position',
+  notes: 'notes',
+};
+
+export async function showContactDetail(
+  chatId: number,
+  userId: string,
+  contactId: string
+) {
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id, first_name, last_name, telegram_handle, project_company, position, notes, email, linkedin, event_title, date_met, last_contacted_at, tags')
+    .eq('id', contactId)
+    .eq('user_id', userId)
+    .single();
+
+  if (!contact) {
+    await sendMessage(chatId, '❌ Contact not found.');
+    return;
+  }
+
+  const name = `${contact.first_name} ${contact.last_name || ''}`.trim();
+  let message = `👤 <b>${escapeHtml(name)}</b>\n\n`;
+
+  if (contact.telegram_handle) {
+    const handle = sanitizeHandle(contact.telegram_handle.replace('@', ''));
+    message += `💬 Telegram: <a href="tg://resolve?domain=${handle}">@${escapeHtml(handle)}</a>\n`;
+  }
+  if (contact.project_company) message += `🏢 Company: ${escapeHtml(contact.project_company)}\n`;
+  if (contact.position) message += `💼 Position: ${escapeHtml(contact.position)}\n`;
+  if (contact.email) message += `📧 Email: ${escapeHtml(contact.email)}\n`;
+  if (contact.linkedin) message += `🔗 LinkedIn: ${escapeHtml(contact.linkedin)}\n`;
+  if (contact.notes) message += `📝 Notes: ${escapeHtml(contact.notes)}\n`;
+
+  const tags = Array.isArray(contact.tags) ? contact.tags as string[] : [];
+  if (tags.length > 0) message += `🏷 Labels: ${tags.map(escapeHtml).join(', ')}\n`;
+
+  if (contact.event_title) message += `\n📍 ${escapeHtml(contact.event_title)}`;
+  if (contact.date_met) {
+    const d = new Date(contact.date_met).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    message += contact.event_title ? ` · ${d}` : `\n📅 Met: ${d}`;
+  }
+  if (contact.event_title || contact.date_met) message += '\n';
+
+  if (contact.last_contacted_at) {
+    const ago = getTimeAgo(new Date(contact.last_contacted_at));
+    message += `✅ Contacted ${ago}\n`;
+  }
+
+  const cid = contact.id as string;
   await sendMessage(chatId, message, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '📱 Open App', web_app: { url: WEBAPP_URL } }],
+        [
+          { text: '✏️ Telegram', callback_data: `cx:e:0:${cid}` },
+          { text: '✏️ Name', callback_data: `cx:e:1:${cid}` },
+          { text: '✏️ Company', callback_data: `cx:e:3:${cid}` },
+        ],
+        [
+          { text: '✏️ Position', callback_data: `cx:e:4:${cid}` },
+          { text: '✏️ Notes', callback_data: `cx:e:5:${cid}` },
+          { text: `🏷 Labels${tags.length > 0 ? ` (${tags.length})` : ''}`, callback_data: `cx:t:${cid}` },
+        ],
+        [
+          { text: '🗑 Delete', callback_data: `cx:d:${cid}` },
+          { text: '« Back', callback_data: 'cx:back' },
+        ],
       ],
     },
   });
+}
+
+export async function handleContactDetailCallback(
+  chatId: number,
+  telegramUserId: number,
+  contactId: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  await showContactDetail(chatId, userId, contactId);
+}
+
+export async function handleContactActionCallback(
+  chatId: number,
+  telegramUserId: number,
+  action: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) return;
+
+  // cx:back — return to /contacts
+  if (action === 'back') {
+    await handleContacts(chatId, telegramUserId);
+    return;
+  }
+
+  // cx:dn — cancel delete
+  if (action === 'dn') {
+    await sendMessage(chatId, '❌ Delete cancelled.');
+    return;
+  }
+
+  // cx:d:<contactId> — show delete confirmation
+  if (action.startsWith('d:') && !action.startsWith('dy:')) {
+    const contactId = action.substring(2);
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('first_name, last_name')
+      .eq('id', contactId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!contact) {
+      await sendMessage(chatId, '❌ Contact not found.');
+      return;
+    }
+
+    const name = `${contact.first_name} ${contact.last_name || ''}`.trim();
+    await sendMessage(
+      chatId,
+      `⚠️ Are you sure you want to delete <b>${escapeHtml(name)}</b>?\n\nThis cannot be undone.`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Yes, delete', callback_data: `cx:dy:${contactId}` },
+              { text: '❌ Cancel', callback_data: 'cx:dn' },
+            ],
+          ],
+        },
+      }
+    );
+    return;
+  }
+
+  // cx:dy:<contactId> — confirm delete
+  if (action.startsWith('dy:')) {
+    const contactId = action.substring(3);
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('first_name, last_name')
+      .eq('id', contactId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!contact) {
+      await sendMessage(chatId, '❌ Contact not found.');
+      return;
+    }
+
+    const name = `${contact.first_name} ${contact.last_name || ''}`.trim();
+
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', contactId)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error deleting contact:', error);
+      await sendMessage(chatId, '❌ Failed to delete contact. Please try again.');
+      return;
+    }
+
+    await sendMessage(chatId, `✅ <b>${escapeHtml(name)}</b> has been deleted.`);
+    return;
+  }
+
+  // cx:e:<fieldIndex>:<contactId> — edit a field
+  if (action.startsWith('e:')) {
+    const rest = action.substring(2);
+    const colonIdx = rest.indexOf(':');
+    if (colonIdx === -1) return;
+
+    const fieldIndex = parseInt(rest.substring(0, colonIdx), 10);
+    const contactId = rest.substring(colonIdx + 1);
+
+    if (fieldIndex < 0 || fieldIndex >= FIELD_FLOW.length) return;
+
+    const field = FIELD_FLOW[fieldIndex];
+    await setState(telegramUserId, `edit_existing_${field.state}`, { _editContactId: contactId });
+    await sendMessage(chatId, `✏️ ${field.prompt}\n\nSend /cancel to cancel.`);
+    return;
+  }
+
+  // cx:t:<contactId> — edit tags
+  if (action.startsWith('t:')) {
+    const contactId = action.substring(2);
+
+    // Fetch current tags
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('tags')
+      .eq('id', contactId)
+      .eq('user_id', userId)
+      .single();
+
+    if (!contact) {
+      await sendMessage(chatId, '❌ Contact not found.');
+      return;
+    }
+
+    const currentTags = Array.isArray(contact.tags) ? contact.tags as string[] : [];
+
+    // Fetch user's tag list
+    const { data: userTags } = await supabase
+      .from('user_tags')
+      .select('name')
+      .eq('user_id', userId)
+      .order('name', { ascending: true });
+
+    if (!userTags || userTags.length === 0) {
+      await sendMessage(chatId, '🏷 No labels created yet. Create labels in the web app first, then assign them here.');
+      return;
+    }
+
+    await setState(telegramUserId, 'select_tags', {
+      _editContactId: contactId,
+      _selectedTags: currentTags,
+    });
+
+    const keyboard = userTags.map((t) => {
+      const name = t.name as string;
+      const selected = currentTags.includes(name);
+      return [{ text: `${selected ? '✅' : '⬜️'} ${name}`, callback_data: `tg:t:${name.substring(0, 55)}` }];
+    });
+    keyboard.push([{ text: '✅ Done', callback_data: 'tg:done' }]);
+
+    await sendMessage(chatId,
+      `🏷 <b>Select labels</b> (up to 3):\n\nCurrently selected: ${currentTags.length > 0 ? currentTags.join(', ') : 'none'}`,
+      { reply_markup: { inline_keyboard: keyboard } }
+    );
+    return;
+  }
+}
+
+export async function handleEditExistingContactText(
+  chatId: number,
+  telegramUserId: number,
+  text: string,
+  currentState: BotState
+): Promise<boolean> {
+  if (!currentState.state.startsWith('edit_existing_')) return false;
+
+  const contactId = currentState.data._editContactId as string;
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId || !contactId) return false;
+
+  // Determine which field from state name
+  const fieldState = currentState.state.replace('edit_existing_', '');
+  const fieldConfig = FIELD_FLOW.find((f) => f.state === fieldState);
+  if (!fieldConfig) return false;
+
+  // Build update object
+  const column = FIELD_COLUMN_MAP[fieldConfig.field];
+  if (!column) return false;
+
+  let value: string;
+  if (fieldConfig.field === 'telegramHandle') {
+    value = text.startsWith('@') ? text : `@${text}`;
+  } else {
+    value = text.trim();
+  }
+
+  const { error } = await supabase
+    .from('contacts')
+    .update({ [column]: value })
+    .eq('id', contactId)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error updating contact:', error);
+    await sendMessage(chatId, '❌ Failed to update contact. Please try again.');
+    await clearState(telegramUserId);
+    return true;
+  }
+
+  await clearState(telegramUserId);
+  await sendMessage(chatId, '✅ Updated!');
+  await showContactDetail(chatId, userId, contactId);
+  return true;
 }
 
 export async function handleContacted(

@@ -53,6 +53,9 @@ import {
   handleContactsListSelection,
   handleContactsEventSelection,
   handleContacted,
+  handleContactDetailCallback,
+  handleContactActionCallback,
+  handleEditExistingContactText,
 } from './_flows/contacts-view.js';
 import {
   handleHandshake,
@@ -87,6 +90,12 @@ async function handleTextInput(
   if (currentState.state.startsWith('new_ev_')) {
     await handleEventTextInput(chatId, telegramUserId, text, currentState);
     return;
+  }
+
+  // Edit existing contact field
+  if (currentState.state.startsWith('edit_existing_')) {
+    const handled = await handleEditExistingContactText(chatId, telegramUserId, text, currentState);
+    if (handled) return;
   }
 
   // Contact creation flow
@@ -305,6 +314,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       else if (data.startsWith('ce:')) {
         await handleContactsEventSelection(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Contact detail view ---
+      else if (data.startsWith('cv:')) {
+        await handleContactDetailCallback(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Contact actions (edit, delete, tags) ---
+      else if (data.startsWith('cx:')) {
+        await handleContactActionCallback(chatId, telegramUserId, data.substring(3), cq.id);
       }
       // --- Enrichment callbacks ---
       else if (data.startsWith('en:')) {

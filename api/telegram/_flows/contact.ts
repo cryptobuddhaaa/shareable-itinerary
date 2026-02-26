@@ -6,6 +6,7 @@ import { getState, setState, clearState, getLinkedUserId } from '../_lib/state.j
 import { escapeHtml } from '../_lib/utils.js';
 import type { BotState, EventInfo, FieldConfig } from '../_lib/types.js';
 import { showEventConfirmation } from './event.js';
+import { showContactDetail } from './contacts-view.js';
 
 // --- Contact field input flow ---
 export const FIELD_FLOW: FieldConfig[] = [
@@ -572,7 +573,19 @@ export async function handleTagSelection(
   }
 
   if (action === 'done') {
-    // Return to confirmation screen
+    // If editing an existing contact, save tags to DB and return to detail view
+    const editContactId = currentState.data._editContactId as string | undefined;
+    if (editContactId) {
+      const userId = await getLinkedUserId(telegramUserId);
+      if (userId) {
+        await supabase.from('contacts').update({ tags: selectedTags })
+          .eq('id', editContactId).eq('user_id', userId);
+        await clearState(telegramUserId);
+        await showContactDetail(chatId, userId, editContactId);
+      }
+      return;
+    }
+    // Return to new contact confirmation screen
     await showContactConfirmation(chatId, telegramUserId, currentState.data);
     return;
   }
