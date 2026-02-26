@@ -81,18 +81,38 @@ export async function handleEnrich(chatId: number, telegramUserId: number, args:
   }
 
   if (args.trim()) {
-    // Direct enrichment: /enrich Name, Context
-    const parts = args.split(',').map((s) => s.trim());
-    const name = parts[0];
-    const context = parts.slice(1).join(', ') || undefined;
+    let contacts: { id: unknown; first_name: unknown; last_name: unknown; project_company: unknown; position: unknown }[] | null = null;
+    let context: string | undefined;
 
-    // Try to find matching contact
-    const { data: contacts } = await supabase
-      .from('contacts')
-      .select('id, first_name, last_name, project_company, position')
-      .eq('user_id', userId)
-      .or(`first_name.ilike.%${name.split(' ')[0]}%,last_name.ilike.%${name.split(' ').slice(1).join(' ') || name}%`)
-      .limit(1);
+    if (args.trim().startsWith('@')) {
+      // Direct enrichment by Telegram handle: /enrich @username
+      const handle = args.replace('@', '').trim();
+      if (!handle) {
+        await sendMessage(chatId, 'Usage: /enrich @username');
+        return;
+      }
+
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, project_company, position')
+        .eq('user_id', userId)
+        .ilike('telegram_handle', handle)
+        .limit(1);
+      contacts = data;
+    } else {
+      // Direct enrichment by name: /enrich Name, Context
+      const parts = args.split(',').map((s) => s.trim());
+      const name = parts[0];
+      context = parts.slice(1).join(', ') || undefined;
+
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, project_company, position')
+        .eq('user_id', userId)
+        .or(`first_name.ilike.%${name.split(' ')[0]}%,last_name.ilike.%${name.split(' ').slice(1).join(' ') || name}%`)
+        .limit(1);
+      contacts = data;
+    }
 
     if (contacts && contacts.length > 0) {
       const contact = contacts[0];
@@ -124,8 +144,9 @@ export async function handleEnrich(chatId: number, telegramUserId: number, args:
         await sendMessage(chatId, `❌ Enrichment failed: ${escapeHtml(errMsg)}`);
       }
     } else {
-      // No matching contact found — still enrich with the provided name
-      await sendMessage(chatId, `⚠️ No matching contact found for "${escapeHtml(name)}". Use /newcontact to add them first, then try /enrich again.`);
+      // No matching contact found
+      const query = args.trim().startsWith('@') ? `@${args.replace('@', '').trim()}` : args.trim();
+      await sendMessage(chatId, `⚠️ No matching contact found for "${escapeHtml(query)}". Use /newcontact to add them first, then try /enrich again.`);
     }
   } else {
     // Show recent contacts to pick from
