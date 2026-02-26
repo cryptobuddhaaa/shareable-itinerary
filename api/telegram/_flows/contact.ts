@@ -681,7 +681,7 @@ export async function handleContactConfirmation(
   }
 
   // Insert contact into Supabase
-  const { error } = await supabase.from('contacts').insert({
+  const { data: inserted, error } = await supabase.from('contacts').insert({
     itinerary_id: itineraryId || null,
     event_id: eventId || null,
     user_id: userId,
@@ -695,9 +695,14 @@ export async function handleContactConfirmation(
     luma_event_url: lumaEventUrl || null,
     date_met: eventDate || null,
     tags: selectedTags.length > 0 ? selectedTags : [],
-  });
+  }).select('id').single();
 
-  await clearState(telegramUserId);
+  // Store last-created contact ID so /enrich can auto-target it
+  if (inserted) {
+    await setState(telegramUserId, 'idle', { _lastContactId: inserted.id });
+  } else {
+    await clearState(telegramUserId);
+  }
 
   if (error) {
     console.error('Error inserting contact:', error);
@@ -715,6 +720,7 @@ export async function handleContactConfirmation(
     `✅ Contact saved!\n\n` +
       `<b>${escapeHtml(displayName)}</b>${escapeHtml(company)}\n` +
       (eventTitle ? `→ ${escapeHtml(eventTitle)}\n\n` : '\n') +
+      'Use /enrich to generate this contact\'s AI profile.\n' +
       'Use /newcontact to add another contact.',
     {
       reply_markup: {

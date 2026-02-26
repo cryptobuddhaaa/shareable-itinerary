@@ -2,7 +2,7 @@
 
 import { supabase } from '../_lib/config.js';
 import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
-import { getLinkedUserId } from '../_lib/state.js';
+import { getLinkedUserId, getState, clearState } from '../_lib/state.js';
 import { escapeHtml } from '../_lib/utils.js';
 import {
   performEnrichment,
@@ -149,6 +149,47 @@ export async function handleEnrich(chatId: number, telegramUserId: number, args:
       await sendMessage(chatId, `⚠️ No matching contact found for "${escapeHtml(query)}". Use /newcontact to add them first, then try /enrich again.`);
     }
   } else {
+    // Check if there's a last-created contact to auto-enrich
+    const botState = await getState(telegramUserId);
+    const lastContactId = botState.data?._lastContactId as string | undefined;
+
+    if (lastContactId) {
+      // Clear the stored ID so subsequent /enrich calls show the picker
+      await clearState(telegramUserId);
+
+      const { data: lastContact } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, project_company, position')
+        .eq('id', lastContactId)
+        .eq('user_id', userId)
+        .single();
+
+      if (lastContact) {
+        const name = `${lastContact.first_name} ${lastContact.last_name}`;
+        const context = [lastContact.project_company, lastContact.position].filter(Boolean).join(', ') || undefined;
+
+        await sendMessage(chatId, `✨ Enriching profile for <b>${escapeHtml(name)}</b>...`);
+
+        try {
+          const enrichment = await performEnrichment(userId, lastContact.id as string, name, context);
+          const msg = formatEnrichmentMessage(name, enrichment.enrichmentData, enrichment.confidence);
+          const updatedUsage = await getUsage(userId);
+
+          await sendMessage(chatId, msg + `\n\n<i>${updatedUsage.used}/${updatedUsage.limit} enrichments used this month</i>`, {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔄 Regenerate', callback_data: `en:${lastContact.id}` }],
+              ],
+            },
+          });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          await sendMessage(chatId, `❌ Enrichment failed: ${escapeHtml(errMsg)}`);
+        }
+        return;
+      }
+    }
+
     // Show recent contacts to pick from
     const { data: contacts } = await supabase
       .from('contacts')
