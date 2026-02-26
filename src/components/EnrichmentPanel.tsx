@@ -38,7 +38,7 @@ function ConfidenceBadge({ confidence }: { confidence: string | null }) {
 }
 
 export default function EnrichmentPanel({ enrichment, onRegenerate, regenerating }: EnrichmentPanelProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const data = enrichment.enrichmentData;
 
   if (!data) return null;
