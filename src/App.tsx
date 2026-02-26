@@ -15,6 +15,7 @@ import { ConfirmDialog, useConfirmDialog } from './components/ConfirmDialog';
 import { WalletButton } from './components/WalletButton';
 import { useUserWallet } from './hooks/useUserWallet';
 import { useHandshakes } from './hooks/useHandshakes';
+import { useEnrichment } from './hooks/useEnrichment';
 import { HandshakeClaimPage } from './components/HandshakeClaimPage';
 import Dashboard from './components/Dashboard';
 import ProfilePage from './components/ProfilePage';
@@ -28,6 +29,7 @@ function App() {
   const { initialize: initializeContacts, initialized: contactsInitialized, reset: resetContacts } = useContacts();
   const { initialize: initializeWallets, initialized: walletsInitialized, reset: resetWallets } = useUserWallet();
   const { initialize: initializeHandshakes, initialized: handshakesInitialized, handshakes, reset: resetHandshakes } = useHandshakes();
+  const { initialize: initializeEnrichments, initialized: enrichmentsInitialized, reset: resetEnrichments } = useEnrichment();
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('itinerary');
@@ -142,7 +144,13 @@ function App() {
     } else if (!user && handshakesInitialized) {
       resetHandshakes();
     }
-  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts, walletsInitialized, initializeWallets, resetWallets, handshakesInitialized, initializeHandshakes, resetHandshakes]);
+
+    if (user && !enrichmentsInitialized) {
+      initializeEnrichments();
+    } else if (!user && enrichmentsInitialized) {
+      resetEnrichments();
+    }
+  }, [user, initialized, initialize, reset, contactsInitialized, initializeContacts, resetContacts, walletsInitialized, initializeWallets, resetWallets, handshakesInitialized, initializeHandshakes, resetHandshakes, enrichmentsInitialized, initializeEnrichments, resetEnrichments]);
 
   // This effect is removed - we handle shared itineraries separately now
 

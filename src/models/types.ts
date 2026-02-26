@@ -185,3 +185,47 @@ export interface UserProfile {
   createdAt: string;
   updatedAt: string;
 }
+
+// --- Contact Enrichment ---
+
+export interface EnrichmentRole {
+  title: string;
+  organization: string;
+  current: boolean;
+}
+
+export interface EnrichmentSocialLink {
+  platform: string;
+  url?: string;
+  handle?: string;
+}
+
+export interface EnrichmentData {
+  summary: string;
+  roles: EnrichmentRole[];
+  background: string[];
+  notableActivity: string[];
+  talkingPoints: string[];
+  socialLinks: EnrichmentSocialLink[];
+  suggestedTags: string[];
+}
+
+export interface ContactEnrichment {
+  id: string;
+  contactId: string;
+  userId: string;
+  queryName: string;
+  queryContext: string | null;
+  enrichmentData: EnrichmentData;
+  confidence: 'low' | 'medium' | 'high' | null;
+  sources: string[];
+  status: 'pending' | 'completed' | 'failed';
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnrichmentUsage {
+  used: number;
+  limit: number;
+}

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useContacts } from '../hooks/useContacts';
 import { useHandshakes } from '../hooks/useHandshakes';
+import { useEnrichment } from '../hooks/useEnrichment';
 import { useAuth } from '../hooks/useAuth';
 import ContactsList from './ContactsList';
 import ContactForm from './ContactForm';
@@ -19,6 +20,7 @@ export default function ContactsPage() {
   const { user } = useAuth();
   const { contacts, tags, addTag, deleteTag, initialize } = useContacts();
   const { initialize: initializeHandshakes } = useHandshakes();
+  const { usage } = useEnrichment();
 
   // Auto-refresh contacts and handshakes when tab is opened (component mounts)
   useEffect(() => {
@@ -226,11 +228,23 @@ export default function ContactsPage() {
   return (
     <div>
       <div className="mb-6">
-        <div className="mb-3">
-          <h2 className="text-xl font-bold text-white">My Contacts</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            People you've connected with across all your trips and events
-          </p>
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white">My Contacts</h2>
+            <p className="text-sm text-slate-400 mt-1">
+              People you've connected with across all your trips and events
+            </p>
+          </div>
+          {contacts.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-900/30 border border-purple-700/50 rounded-lg flex-shrink-0">
+              <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              <span className="text-xs text-purple-300">
+                {usage.used}/{usage.limit} enrichments
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button

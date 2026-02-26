@@ -62,6 +62,10 @@ import {
   handleTrust,
   handleMyHandshakes,
 } from './_flows/trust-points.js';
+import {
+  handleEnrich,
+  handleEnrichCallback,
+} from './_flows/enrichment.js';
 
 // --- Text input router ---
 
@@ -171,6 +175,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await handleTrust(chatId, telegramUserId);
       } else if (text === '/shakehistory') {
         await handleMyHandshakes(chatId, telegramUserId);
+      } else if (text.startsWith('/enrich')) {
+        const args = text.substring('/enrich'.length).trim();
+        await handleEnrich(chatId, telegramUserId, args);
       } else if (text === '/cancel') {
         await clearState(telegramUserId);
         await sendMessage(chatId, '❌ Cancelled. Use /help for commands.');
@@ -193,6 +200,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '/shakehistory — View your handshake history\n' +
             '/points — Check your points balance\n' +
             '/trust — View your trust score breakdown\n\n' +
+            '✨ <b>AI Enrichment</b>\n' +
+            '/enrich — Pick a contact to research with AI\n' +
+            '/enrich Name, Company — Enrich a specific contact\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
             '• <b>Forward a message</b> → if the sender is already a contact, save it as a timestamped note; otherwise create a new contact\n' +
             '• <b>Paste Luma links</b> during /newevent → auto-imports event details\n\n' +
@@ -284,6 +294,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       else if (data.startsWith('ce:')) {
         await handleContactsEventSelection(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Enrichment callbacks ---
+      else if (data.startsWith('en:')) {
+        await handleEnrichCallback(chatId, telegramUserId, data.substring(3), cq.id);
       }
     }
 

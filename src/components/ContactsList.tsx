@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useContacts } from '../hooks/useContacts';
+import { useEnrichment } from '../hooks/useEnrichment';
 import EditContactDialog from './EditContactDialog';
+import EnrichmentPanel, { EnrichmentSkeleton } from './EnrichmentPanel';
 import { extractLinkedInHandle } from '../lib/validation';
 import type { Contact, ContactNote } from '../models/types';
 import { supabase } from '../lib/supabase';
@@ -32,6 +34,7 @@ interface ContactsListProps {
 
 export default function ContactsList({ itineraryId, contacts: providedContacts }: ContactsListProps) {
   const { contacts, getContactsByItinerary, deleteContact, updateContact, addNote } = useContacts();
+  const { enrich, getByContactId, enrichingContactId, usage } = useEnrichment();
   const { user } = useAuth();
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const { confirm, dialogProps } = useConfirmDialog();
@@ -182,6 +185,22 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
     }
   };
 
+  const handleEnrich = async (contact: Contact) => {
+    const name = `${contact.firstName} ${contact.lastName}`;
+    const context = [contact.projectCompany, contact.position].filter(Boolean).join(', ') || undefined;
+    try {
+      await enrich(contact.id, name, context);
+      toast.success(`Profile enriched for ${contact.firstName}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Enrichment failed';
+      if (msg.includes('LIMIT_REACHED')) {
+        toast.error('Monthly enrichment limit reached (10/10).');
+      } else {
+        toast.error(msg);
+      }
+    }
+  };
+
   if (displayContacts.length === 0) {
     return (
       <div className="text-center py-12">
@@ -227,6 +246,27 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 )}
               </div>
               <div className="flex gap-1">
+                <button
+                  onClick={() => handleEnrich(contact)}
+                  disabled={enrichingContactId === contact.id || usage.used >= usage.limit}
+                  className={`p-1.5 ${
+                    getByContactId(contact.id)
+                      ? 'text-purple-400 hover:text-purple-300'
+                      : 'text-slate-400 hover:text-purple-400'
+                  } disabled:opacity-50`}
+                  title={
+                    usage.used >= usage.limit
+                      ? 'Monthly enrichment limit reached'
+                      : getByContactId(contact.id)
+                        ? 'Regenerate AI profile'
+                        : 'Enrich with AI'
+                  }
+                  aria-label="Enrich contact with AI"
+                >
+                  <svg className={`w-4 h-4 ${enrichingContactId === contact.id ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                </button>
                 <button
                   onClick={() => handleToggleContacted(contact)}
                   className={`${contact.lastContactedAt ? 'text-green-400 hover:text-red-400' : 'text-slate-400 hover:text-green-400'} p-1.5`}
@@ -421,6 +461,18 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
                 </div>
               )}
             </div>
+
+            {/* AI Enrichment Panel */}
+            {enrichingContactId === contact.id && !getByContactId(contact.id) && (
+              <EnrichmentSkeleton />
+            )}
+            {getByContactId(contact.id) && (
+              <EnrichmentPanel
+                enrichment={getByContactId(contact.id)!}
+                onRegenerate={() => handleEnrich(contact)}
+                regenerating={enrichingContactId === contact.id}
+              />
+            )}
 
             {(contact.eventTitle || contact.dateMet) && (
               <div className="mt-3 pt-3 border-t border-slate-700">

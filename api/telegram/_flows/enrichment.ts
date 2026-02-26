@@ -1,0 +1,212 @@
+// /enrich — AI-powered contact enrichment via Telegram bot
+
+import { supabase } from '../_lib/config.js';
+import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
+import { getLinkedUserId } from '../_lib/state.js';
+import { escapeHtml } from '../_lib/utils.js';
+import {
+  performEnrichment,
+  getUsage,
+} from '../../_lib/enrichment.js';
+import type { EnrichmentData } from '../../_lib/enrichment.js';
+
+function formatEnrichmentMessage(name: string, data: EnrichmentData, confidence: string | null): string {
+  let msg = `✨ <b>AI Profile: ${escapeHtml(name)}</b>\n\n`;
+
+  if (data.summary) {
+    msg += `${escapeHtml(data.summary)}\n\n`;
+  }
+
+  if (data.roles && data.roles.length > 0) {
+    msg += '<b>Roles:</b>\n';
+    for (const role of data.roles) {
+      const marker = role.current ? '🟢' : '⚪';
+      msg += `  ${marker} ${escapeHtml(role.title)} at ${escapeHtml(role.organization)}\n`;
+    }
+    msg += '\n';
+  }
+
+  if (data.background && data.background.length > 0) {
+    msg += '<b>Background:</b>\n';
+    for (const item of data.background.slice(0, 3)) {
+      msg += `  • ${escapeHtml(item)}\n`;
+    }
+    msg += '\n';
+  }
+
+  if (data.talkingPoints && data.talkingPoints.length > 0) {
+    msg += '<b>Talking Points:</b>\n';
+    for (const item of data.talkingPoints.slice(0, 3)) {
+      msg += `  💬 ${escapeHtml(item)}\n`;
+    }
+    msg += '\n';
+  }
+
+  if (data.socialLinks && data.socialLinks.length > 0) {
+    const links = data.socialLinks
+      .map((l) => `${escapeHtml(l.platform)}${l.handle ? ': ' + escapeHtml(l.handle) : ''}`)
+      .join(' | ');
+    msg += `<b>Social:</b> ${links}\n\n`;
+  }
+
+  if (data.suggestedTags && data.suggestedTags.length > 0) {
+    msg += `<b>Tags:</b> ${data.suggestedTags.map((t) => `#${escapeHtml(t)}`).join(' ')}\n\n`;
+  }
+
+  const confLabel = confidence === 'high' ? '🟢 High' : confidence === 'medium' ? '🟡 Medium' : '🔴 Low';
+  msg += `<i>Confidence: ${confLabel}</i>`;
+
+  return msg;
+}
+
+/**
+ * /enrich — Enrich a contact by name or select from list
+ * Usage: /enrich or /enrich John Smith, Company
+ */
+export async function handleEnrich(chatId: number, telegramUserId: number, args: string) {
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked yet. Use /start to link.');
+    return;
+  }
+
+  // Check usage
+  const usage = await getUsage(userId);
+  if (usage.used >= usage.limit) {
+    await sendMessage(
+      chatId,
+      `❌ You've used all ${usage.limit} enrichments this month (${usage.used}/${usage.limit}).`
+    );
+    return;
+  }
+
+  if (args.trim()) {
+    // Direct enrichment: /enrich Name, Context
+    const parts = args.split(',').map((s) => s.trim());
+    const name = parts[0];
+    const context = parts.slice(1).join(', ') || undefined;
+
+    // Try to find matching contact
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, project_company, position')
+      .eq('user_id', userId)
+      .or(`first_name.ilike.%${name.split(' ')[0]}%,last_name.ilike.%${name.split(' ').slice(1).join(' ') || name}%`)
+      .limit(1);
+
+    if (contacts && contacts.length > 0) {
+      const contact = contacts[0];
+      await sendMessage(chatId, `✨ Enriching profile for <b>${escapeHtml(contact.first_name as string)} ${escapeHtml(contact.last_name as string)}</b>...`);
+
+      try {
+        const enrichment = await performEnrichment(
+          userId,
+          contact.id as string,
+          `${contact.first_name} ${contact.last_name}`,
+          context || [contact.project_company, contact.position].filter(Boolean).join(', ') || undefined
+        );
+
+        const msg = formatEnrichmentMessage(
+          `${contact.first_name} ${contact.last_name}`,
+          enrichment.enrichmentData,
+          enrichment.confidence
+        );
+
+        await sendMessage(chatId, msg, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔄 Regenerate', callback_data: `en:${contact.id}` }],
+            ],
+          },
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        await sendMessage(chatId, `❌ Enrichment failed: ${escapeHtml(errMsg)}`);
+      }
+    } else {
+      // No matching contact found — still enrich with the provided name
+      await sendMessage(chatId, `⚠️ No matching contact found for "${escapeHtml(name)}". Use /newcontact to add them first, then try /enrich again.`);
+    }
+  } else {
+    // Show recent contacts to pick from
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, project_company')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(8);
+
+    if (!contacts || contacts.length === 0) {
+      await sendMessage(chatId, '📭 No contacts found. Add contacts first with /newcontact.');
+      return;
+    }
+
+    const keyboard = contacts.map((c) => [{
+      text: `${c.first_name} ${c.last_name}${c.project_company ? ` (${c.project_company})` : ''}`,
+      callback_data: `en:${c.id}`,
+    }]);
+
+    await sendMessage(
+      chatId,
+      `✨ <b>AI Enrichment</b> (${usage.used}/${usage.limit} used)\n\nSelect a contact to enrich:`,
+      { reply_markup: { inline_keyboard: keyboard } }
+    );
+  }
+}
+
+/**
+ * Handle en: callback — either selecting a contact to enrich or regenerating
+ */
+export async function handleEnrichCallback(
+  chatId: number,
+  telegramUserId: number,
+  contactId: string,
+  callbackQueryId: string
+) {
+  await answerCallbackQuery(callbackQueryId);
+
+  const userId = await getLinkedUserId(telegramUserId);
+  if (!userId) {
+    await sendMessage(chatId, '❌ Your account is not linked.');
+    return;
+  }
+
+  // Fetch contact
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id, first_name, last_name, project_company, position')
+    .eq('id', contactId)
+    .eq('user_id', userId)
+    .single();
+
+  if (!contact) {
+    await sendMessage(chatId, '❌ Contact not found.');
+    return;
+  }
+
+  const name = `${contact.first_name} ${contact.last_name}`;
+  const context = [contact.project_company, contact.position].filter(Boolean).join(', ') || undefined;
+
+  await sendMessage(chatId, `✨ Enriching profile for <b>${escapeHtml(name)}</b>...`);
+
+  try {
+    const enrichment = await performEnrichment(userId, contact.id as string, name, context);
+    const msg = formatEnrichmentMessage(name, enrichment.enrichmentData, enrichment.confidence);
+
+    const usage = await getUsage(userId);
+    await sendMessage(chatId, msg + `\n\n<i>${usage.used}/${usage.limit} enrichments used this month</i>`, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔄 Regenerate', callback_data: `en:${contact.id}` }],
+        ],
+      },
+    });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    if (errMsg.includes('LIMIT_REACHED')) {
+      await sendMessage(chatId, `❌ Monthly enrichment limit reached.`);
+    } else {
+      await sendMessage(chatId, `❌ Enrichment failed: ${escapeHtml(errMsg)}`);
+    }
+  }
+}
