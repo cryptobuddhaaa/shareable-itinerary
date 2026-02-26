@@ -22,6 +22,7 @@ import {
   handleContactEdit,
   handleTagSelection,
   handleContactConfirmation,
+  handleUsersShared,
 } from './_flows/contact.js';
 import {
   handleNewItinerary,
@@ -140,9 +141,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const telegramUsername: string | undefined = msg.from.username;
       const text: string = msg.text || '';
 
-      // Check for forwarded messages first — auto-create contact from sender
+      // Check for shared users (from "Pick from Telegram" contact picker button)
+      if (msg.users_shared) {
+        await handleUsersShared(chatId, telegramUserId, msg.users_shared as {
+          request_id: number;
+          users: Array<{ user_id: number; first_name?: string; last_name?: string; username?: string }>;
+        });
+      }
+      // Check for forwarded messages — auto-create contact from sender
       // Support both legacy (forward_from/forward_sender_name) and Bot API 7.0+ (forward_origin)
-      if (msg.forward_from || msg.forward_sender_name || msg.forward_origin) {
+      else if (msg.forward_from || msg.forward_sender_name || msg.forward_origin) {
         await handleForwardedMessage(chatId, telegramUserId, msg);
       } else if (text.startsWith('/start')) {
         const args = text.substring('/start'.length).trim();

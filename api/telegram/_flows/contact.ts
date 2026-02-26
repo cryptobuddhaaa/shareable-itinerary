@@ -58,7 +58,13 @@ export async function goToNextField(
   stateData: Record<string, unknown>,
   currentIndex: number
 ) {
-  const nextIndex = currentIndex + 1;
+  const contact = (stateData.contact as Record<string, string>) || {};
+  let nextIndex = currentIndex + 1;
+
+  // Skip fields that are already pre-filled (e.g. from Telegram contact picker)
+  while (nextIndex < FIELD_FLOW.length && contact[FIELD_FLOW[nextIndex].field]) {
+    nextIndex++;
+  }
 
   // No more fields → show confirmation
   if (nextIndex >= FIELD_FLOW.length) {
@@ -77,6 +83,102 @@ export async function goToNextField(
   }
 
   await sendMessage(chatId, nextField.prompt, options);
+}
+
+/** Show "Pick from Telegram" vs "Enter manually" choice before field input. */
+export async function showContactMethodChoice(
+  chatId: number,
+  telegramUserId: number,
+  stateData: Record<string, unknown>,
+  contextMessage?: string
+) {
+  await setState(telegramUserId, 'pick_contact_method', { ...stateData, contact: {} });
+
+  const intro = contextMessage ? `${contextMessage}\n\n` : '';
+  await sendMessage(
+    chatId,
+    intro +
+      '👤 How would you like to add this contact?\n\n' +
+      'Tap <b>Pick from Telegram</b> to auto-fill their name &amp; handle, ' +
+      'or <b>Enter manually</b> to type the details.',
+    {
+      reply_markup: {
+        keyboard: [
+          [{
+            text: '👤 Pick from Telegram',
+            request_users: {
+              request_id: 1,
+              user_is_bot: false,
+              max_quantity: 1,
+              request_name: true,
+              request_username: true,
+            },
+          }],
+          [{ text: '✏️ Enter manually' }],
+        ],
+        one_time_keyboard: true,
+        resize_keyboard: true,
+      },
+    }
+  );
+}
+
+/** Handle users_shared from KeyboardButtonRequestUsers (Telegram contact picker). */
+export async function handleUsersShared(
+  chatId: number,
+  telegramUserId: number,
+  usersShared: {
+    request_id: number;
+    users: Array<{ user_id: number; first_name?: string; last_name?: string; username?: string }>;
+  }
+) {
+  const currentState = await getState(telegramUserId);
+  if (currentState.state !== 'pick_contact_method') {
+    return;
+  }
+
+  const sharedUser = usersShared.users?.[0];
+  if (!sharedUser) {
+    await sendMessage(chatId, '❌ No user data received. Please try again.', {
+      reply_markup: { remove_keyboard: true },
+    });
+    return;
+  }
+
+  const firstName = sharedUser.first_name || '';
+  const lastName = sharedUser.last_name || '';
+  const telegramHandle = sharedUser.username ? `@${sharedUser.username}` : '';
+
+  // Pre-fill the contact object with whatever we got
+  const contact: Record<string, string> = {};
+  if (telegramHandle) contact.telegramHandle = telegramHandle;
+  if (firstName) contact.firstName = firstName;
+  if (lastName) contact.lastName = lastName;
+
+  const updatedData = { ...currentState.data, contact };
+
+  // Build auto-fill summary
+  const parts: string[] = [];
+  if (telegramHandle) parts.push(`💬 ${escapeHtml(telegramHandle)}`);
+  if (firstName || lastName) {
+    const name = [firstName, lastName].filter(Boolean).join(' ');
+    parts.push(`👤 ${escapeHtml(name)}`);
+  }
+
+  if (parts.length > 0) {
+    await sendMessage(chatId,
+      `✅ Auto-filled from Telegram:\n${parts.join('\n')}`,
+      { reply_markup: { remove_keyboard: true } }
+    );
+  } else {
+    await sendMessage(chatId,
+      '❌ Could not get contact info. Let\'s enter the details manually.',
+      { reply_markup: { remove_keyboard: true } }
+    );
+  }
+
+  // Advance to the first unfilled field (goToNextField skips pre-filled ones)
+  await goToNextField(chatId, telegramUserId, updatedData, -1);
 }
 
 export async function handleNewContact(chatId: number, telegramUserId: number) {
@@ -143,15 +245,7 @@ export async function handleItinerarySelection(
       delete data.eventDate;
       await showContactConfirmation(chatId, telegramUserId, data);
     } else {
-      await setState(telegramUserId, 'input_telegram_handle', {
-        contact: {},
-      });
-      await sendMessage(
-        chatId,
-        '📝 Adding standalone contact\n\n' +
-          'Enter their <b>Telegram handle</b> (required):\n' +
-          '<i>e.g. @johndoe</i>'
-      );
+      await showContactMethodChoice(chatId, telegramUserId, {}, '📝 Adding standalone contact');
     }
     return;
   }
@@ -247,17 +341,10 @@ export async function handleEventSelection(
       delete data.eventDate;
       await showContactConfirmation(chatId, telegramUserId, data);
     } else {
-      await setState(telegramUserId, 'input_telegram_handle', {
+      await showContactMethodChoice(chatId, telegramUserId, {
         itineraryId: currentState.data.itineraryId,
         itineraryTitle: currentState.data.itineraryTitle,
-        contact: {},
-      });
-      await sendMessage(
-        chatId,
-        '📝 Adding contact (no event)\n\n' +
-          'Enter their <b>Telegram handle</b> (required):\n' +
-          '<i>e.g. @johndoe</i>'
-      );
+      }, '📝 Adding contact (no event)');
     }
     return;
   }
@@ -281,20 +368,12 @@ export async function handleEventSelection(
     };
     await showContactConfirmation(chatId, telegramUserId, data);
   } else {
-    await setState(telegramUserId, 'input_telegram_handle', {
+    await showContactMethodChoice(chatId, telegramUserId, {
       ...currentState.data,
       eventId: selectedEvent.id,
       eventTitle: selectedEvent.title,
       eventDate: selectedEvent.date,
-      contact: {},
-    });
-
-    await sendMessage(
-      chatId,
-      `📝 Adding contact to: <b>${escapeHtml(selectedEvent.title)}</b>\n\n` +
-        'Enter their <b>Telegram handle</b> (required):\n' +
-        '<i>e.g. @johndoe</i>'
-    );
+    }, `📝 Adding contact to: <b>${escapeHtml(selectedEvent.title)}</b>`);
   }
 }
 
@@ -304,6 +383,16 @@ export async function handleContactTextInput(
   text: string,
   currentState: BotState
 ) {
+  // Handle "Enter manually" (or any text) in the pick_contact_method state
+  if (currentState.state === 'pick_contact_method') {
+    const stateData = { ...currentState.data, contact: {} };
+    await setState(telegramUserId, FIELD_FLOW[0].state, stateData);
+    await sendMessage(chatId, FIELD_FLOW[0].prompt, {
+      reply_markup: { remove_keyboard: true },
+    });
+    return true;
+  }
+
   const currentIndex = getFieldIndex(currentState.state);
   if (currentIndex === -1) return false;
 
