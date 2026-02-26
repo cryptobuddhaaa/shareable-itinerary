@@ -34,6 +34,7 @@ export async function handleStart(
           '/trust — View your trust score\n\n' +
           '✨ <b>AI & Quick actions</b>\n' +
           '/enrich — AI-research a contact\'s background\n' +
+          '/enrich @handle — Enrich by Telegram handle\n' +
           '• <b>Forward a message</b> → saves a note or creates a contact\n\n' +
           'Use /help for the full command list.',
         {
@@ -226,6 +227,7 @@ export async function handleStart(
       '🤝 <b>Handshakes & Trust</b>\n' +
       '/handshake — Prove you met someone (soulbound NFT)\n' +
       '/enrich — AI-research a contact\'s background\n' +
+      '/enrich @handle — Enrich by Telegram handle\n' +
       '/trust — View your trust score\n\n' +
       '💡 <b>Forward a message</b> from someone → saves them as a contact, or adds a note if they already exist!\n\n' +
       'Use /help for the full command list.'

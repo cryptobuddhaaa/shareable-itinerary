@@ -220,6 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '/trust — View your trust score breakdown\n\n' +
             '✨ <b>AI Enrichment</b>\n' +
             '/enrich — Pick a contact to research with AI\n' +
+            '/enrich @handle — Enrich by Telegram handle\n' +
             '/enrich Name, Company — Enrich a specific contact\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
             '• <b>Forward a message</b> → saves a note on the contact, or creates a new contact\n' +
