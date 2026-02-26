@@ -23,6 +23,8 @@ sql/           → Database migrations (run in Supabase SQL Editor)
 - **Auth** — Supabase JWT via `Authorization: Bearer` header. All API endpoints use `requireAuth()` from `api/_lib/auth.ts`. Telegram users get synthetic emails (`tg_<id>@telegram.convenu.xyz`).
 - **Trust scores** — Written from 3 paths: bot `/start` linking (`account.ts`), Mini App login (`auth/telegram.ts`), and Dashboard recompute (`trust/compute.ts`). All 3 must stay in sync.
 - **Wallet verification** — Users sign a message containing their user ID + timestamp. Server verifies via `tweetnacl`. Uniqueness enforced: one verified wallet per user, one user per wallet.
+- **Telegram contact picker** — `/newcontact` flow uses Bot API 7.0+ `KeyboardButtonRequestUsers` to let users pick a contact from their Telegram list, auto-filling handle + first/last name. Falls back to manual field-by-field entry. `goToNextField()` skips pre-filled fields automatically.
+- **Follow-Up (bulk messaging)** — `FollowUpDialog.tsx` (formerly `InviteDialog.tsx`) is a 4-step dialog: select contacts (filter by trip + date) → compose message (template + variables) → create custom template (separate screen) → send (copy to clipboard + open DM). Clipboard uses textarea fallback for Telegram WebView compatibility.
 
 ## Build & Dev
 
@@ -81,6 +83,12 @@ npx tsc -b --noEmit  # Type-check only
 
 7. **Contact enrichment architecture** — Enrichment logic lives in `api/_lib/enrichment.ts` (shared by both the web API and Telegram bot). The web API routes through `api/profile/index.ts?action=enrich` to avoid consuming a Vercel function slot. The Telegram bot flow is in `api/telegram/_flows/enrichment.ts`. Both call the same `performEnrichment()` pipeline. Enrichment data is stored as JSONB in `contact_enrichments` table. Usage is tracked in `enrichment_usage` (per-user, per-month). The client-side store is `src/hooks/useEnrichment.ts` (Zustand).
 
+8. **Telegram contact picker state** — The `/newcontact` flow has a `pick_contact_method` state between itinerary/event selection and field input. `handleUsersShared()` processes the `users_shared` update; `handleContactTextInput()` catches text in this state (the "Enter manually" button) and transitions to the normal field flow. The webhook routes `msg.users_shared` before forwarded-message checks.
+
+9. **Clipboard in Telegram WebView** — `navigator.clipboard.writeText()` silently fails in Telegram's WebView. Always use the `copyToClipboard()` helper (try Clipboard API, then fallback to `textarea + document.execCommand('copy')`). Pattern is in `FollowUpDialog.tsx` and `WalletButton.tsx`. Return early if copy fails — do not open a DM link with stale clipboard content.
+
+10. **Follow-Up dialog was renamed** — `InviteDialog.tsx` was renamed to `FollowUpDialog.tsx`. The button in `ContactsPage.tsx` says "Follow-Up" (not "Invite"). Internal state variables use `showFollowUp` / `setShowFollowUp`.
+
 ## Testing Checklist
 
 Before deploying, verify:
@@ -93,3 +101,9 @@ Before deploying, verify:
 - [ ] Contact enrichment: sparkle button triggers enrichment, inline panel displays results
 - [ ] Contact enrichment: usage counter updates, limit enforced at 10/month
 - [ ] Telegram `/enrich` command returns formatted profile with regenerate button
+- [ ] Telegram `/enrich @handle` finds contact by telegram handle and enriches
+- [ ] Telegram `/newcontact` → "Pick from Telegram" auto-fills handle + name, skips to company field
+- [ ] Telegram `/newcontact` → "Enter manually" starts normal field-by-field flow
+- [ ] Follow-Up: date filter presets (Today, This week, etc.) and custom range filter contacts correctly
+- [ ] Follow-Up: "+ Custom" opens dedicated template screen with variable chips and live preview
+- [ ] Follow-Up: "Copy Message & Open DM" copies actual message (not @convenubot) in Telegram Mini App
