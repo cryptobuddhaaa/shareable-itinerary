@@ -3,8 +3,9 @@ import type { ContactEnrichment } from '../models/types';
 
 interface EnrichmentPanelProps {
   enrichment: ContactEnrichment;
-  onRegenerate: () => void;
+  onRegenerate: (enhanced?: boolean) => void;
   regenerating: boolean;
+  isPremium?: boolean;
 }
 
 function getTimeAgo(dateStr: string): string {
@@ -37,8 +38,9 @@ function ConfidenceBadge({ confidence }: { confidence: string | null }) {
   );
 }
 
-export default function EnrichmentPanel({ enrichment, onRegenerate, regenerating }: EnrichmentPanelProps) {
+export default function EnrichmentPanel({ enrichment, onRegenerate, regenerating, isPremium }: EnrichmentPanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const [enhanced, setEnhanced] = useState(false);
   const data = enrichment.enrichmentData;
 
   if (!data) return null;
@@ -179,20 +181,33 @@ export default function EnrichmentPanel({ enrichment, onRegenerate, regenerating
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRegenerate();
-              }}
-              disabled={regenerating}
-              className="text-[10px] text-purple-400 hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
-            >
-              <svg className={`w-3 h-3 ${regenerating ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {regenerating ? 'Regenerating...' : 'Regenerate'}
-            </button>
+            <div className="flex items-center gap-2">
+              {isPremium && (
+                <label className="flex items-center gap-1 cursor-pointer" title="Use Sonnet model for deeper AI analysis">
+                  <input
+                    type="checkbox"
+                    checked={enhanced}
+                    onChange={(e) => setEnhanced(e.target.checked)}
+                    className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-[10px] text-amber-400">Enhanced AI</span>
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRegenerate(enhanced);
+                }}
+                disabled={regenerating}
+                className="text-[10px] text-purple-400 hover:text-purple-300 disabled:opacity-50 flex items-center gap-1"
+              >
+                <svg className={`w-3 h-3 ${regenerating ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {regenerating ? 'Regenerating...' : 'Regenerate'}
+              </button>
+            </div>
           </div>
         </div>
       )}

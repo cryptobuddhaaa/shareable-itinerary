@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { getUserTier, getTierLimits } from './subscription.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -13,8 +14,6 @@ const supabase = createClient(
 
 const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || '';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-
-const FREE_TIER_LIMIT = 10;
 
 // --- Types ---
 
@@ -145,7 +144,8 @@ async function searchWeb(name: string, context?: string): Promise<{ results: Bra
 async function synthesizeProfile(
   name: string,
   context: string | undefined,
-  searchResults: BraveSearchResult[]
+  searchResults: BraveSearchResult[],
+  enhanced?: boolean
 ): Promise<{ data: EnrichmentData; confidence: 'low' | 'medium' | 'high' }> {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY not configured');
@@ -190,8 +190,8 @@ Rules:
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2500,
+      model: enhanced ? 'claude-sonnet-4-5-20241022' : 'claude-haiku-4-5-20251001',
+      max_tokens: enhanced ? 4000 : 2500,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -241,19 +241,25 @@ Rules:
 
 // --- Usage Tracking ---
 
-export async function getUsage(userId: string): Promise<{ used: number; limit: number }> {
+export async function getUsage(userId: string): Promise<{ used: number; limit: number; tier: string }> {
   const month = new Date().toISOString().substring(0, 7); // YYYY-MM
 
-  const { data } = await supabase
-    .from('enrichment_usage')
-    .select('usage_count')
-    .eq('user_id', userId)
-    .eq('month', month)
-    .maybeSingle();
+  const [usageResult, tier] = await Promise.all([
+    supabase
+      .from('enrichment_usage')
+      .select('usage_count')
+      .eq('user_id', userId)
+      .eq('month', month)
+      .maybeSingle(),
+    getUserTier(userId),
+  ]);
+
+  const limits = getTierLimits(tier);
 
   return {
-    used: data?.usage_count ?? 0,
-    limit: FREE_TIER_LIMIT,
+    used: usageResult.data?.usage_count ?? 0,
+    limit: limits.enrichments,
+    tier,
   };
 }
 
@@ -286,12 +292,18 @@ export async function performEnrichment(
   userId: string,
   contactId: string,
   name: string,
-  context?: string
+  context?: string,
+  enhanced?: boolean
 ): Promise<ContactEnrichment> {
-  // Check usage limit
+  // Check usage limit (tier-aware)
   const usage = await getUsage(userId);
   if (usage.used >= usage.limit) {
-    throw new Error('LIMIT_REACHED:You have used all your enrichments for this month (10/10).');
+    throw new Error(`LIMIT_REACHED:You have used all your enrichments for this month (${usage.used}/${usage.limit}).`);
+  }
+
+  // Enhanced enrichment requires premium tier
+  if (enhanced && usage.tier !== 'premium') {
+    enhanced = false;
   }
 
   // Verify the contact belongs to this user
@@ -330,8 +342,8 @@ export async function performEnrichment(
     // Step 1: Web search
     const { results: searchResults } = await searchWeb(name, context);
 
-    // Step 2: LLM synthesis
-    const { data: enrichmentData, confidence } = await synthesizeProfile(name, context, searchResults);
+    // Step 2: LLM synthesis (use Sonnet for enhanced/premium enrichments)
+    const { data: enrichmentData, confidence } = await synthesizeProfile(name, context, searchResults, enhanced);
 
     // Step 3: Extract source URLs
     const sources = searchResults.slice(0, 5).map((r) => r.url);

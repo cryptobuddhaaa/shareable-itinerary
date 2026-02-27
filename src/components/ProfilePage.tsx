@@ -6,11 +6,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useUserWallet } from '../hooks/useUserWallet';
+import { useSubscription } from '../hooks/useSubscription';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { authFetch } from '../lib/authFetch';
 import { supabase } from '../lib/supabase';
 import { toast } from './Toast';
+import { UpgradeModal } from './UpgradeModal';
 import { isTelegramWebApp, openTelegramLink } from '../lib/telegram';
 import { generateTelegramLinkCode, unlinkTelegram } from '../services/telegramService';
 
@@ -38,6 +40,8 @@ const EMPTY_PROFILE: ProfileData = {
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const { subscription, isPremium, initialize: initSub, stripePortal } = useSubscription();
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const { getPrimaryWallet } = useUserWallet();
   const [profile, setProfile] = useState<ProfileData>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
@@ -54,6 +58,10 @@ export default function ProfilePage() {
 
   const wallet = getPrimaryWallet();
   const isMobileOrTelegram = isTelegramWebApp() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+  useEffect(() => {
+    if (user) initSub();
+  }, [user, initSub]);
 
   useEffect(() => {
     if (!user) return;
@@ -384,6 +392,79 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Subscription */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Subscription</h3>
+          {isPremium && (
+            <span className="px-2.5 py-0.5 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/30">
+              PREMIUM
+            </span>
+          )}
+        </div>
+
+        {isPremium ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between py-2 text-sm">
+              <span className="text-slate-400">Plan</span>
+              <span className="text-white font-medium">Premium {subscription?.billingPeriod === 'annual' ? '(Annual)' : '(Monthly)'}</span>
+            </div>
+            {subscription?.paymentProvider === 'admin' ? (
+              <div className="flex items-center justify-between py-2 text-sm">
+                <span className="text-slate-400">Granted by</span>
+                <span className="text-green-400">Admin{subscription.adminGrantReason ? ` — ${subscription.adminGrantReason}` : ''}</span>
+              </div>
+            ) : subscription?.currentPeriodEnd ? (
+              <div className="flex items-center justify-between py-2 text-sm">
+                <span className="text-slate-400">
+                  {subscription.paymentProvider === 'stripe' ? 'Renews' : 'Expires'}
+                </span>
+                <span className="text-slate-200">
+                  {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+                </span>
+              </div>
+            ) : null}
+            {subscription?.paymentProvider === 'stripe' ? (
+              <button
+                onClick={() => { stripePortal().catch((e: Error) => toast.error(e.message)); }}
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors"
+              >
+                Manage Subscription
+              </button>
+            ) : subscription?.paymentProvider !== 'admin' ? (
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+              >
+                Renew Subscription
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400">
+              Upgrade to Premium for 100 AI enrichments/month, unlimited contacts, enhanced AI, and more.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Upgrade — $5/mo
+              </button>
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                $45/year <span className="text-green-400 text-xs">Save $15</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} />
 
       {/* Profile Info */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">

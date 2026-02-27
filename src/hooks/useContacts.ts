@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Contact, UserTag, ContactNote } from '../models/types';
 import { supabase } from '../lib/supabase';
+import { useSubscription } from './useSubscription';
 
 interface ContactsState {
   contacts: Contact[];
@@ -146,10 +147,12 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Check contact limit
+      // Check contact limit (tier-aware)
       const state = get();
-      if (state.contacts.length >= 100) {
-        throw new Error('LIMIT_REACHED:You have reached the maximum limit of 100 contacts. Please delete some contacts before adding new ones.');
+      const { limits } = useSubscription.getState();
+      const contactLimit = limits.contacts;
+      if (contactLimit !== -1 && state.contacts.length >= contactLimit) {
+        throw new Error(`LIMIT_REACHED:You have reached the maximum limit of ${contactLimit} contacts. Upgrade to Premium for unlimited contacts.`);
       }
 
       const { data, error } = await supabase
@@ -283,8 +286,9 @@ export const useContacts = create<ContactsState>()((set, get) => ({
       if (!user) throw new Error('Not authenticated');
 
       const state = get();
-      if (state.tags.length >= 10) {
-        throw new Error('LIMIT_REACHED:Maximum of 10 tags. Delete a tag before adding more.');
+      const tagLimit = useSubscription.getState().limits.tags;
+      if (state.tags.length >= tagLimit) {
+        throw new Error(`LIMIT_REACHED:Maximum of ${tagLimit} tags. Delete a tag before adding more.`);
       }
 
       const { data, error } = await supabase

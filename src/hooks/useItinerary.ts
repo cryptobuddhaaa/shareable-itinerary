@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Itinerary, ItineraryDay, ItineraryEvent } from '../models/types';
 import { supabase } from '../lib/supabase';
 import { toast } from '../components/Toast';
+import { useSubscription } from './useSubscription';
 
 interface ItineraryState {
   itineraries: Itinerary[];
@@ -121,10 +122,11 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
   },
 
   createItinerary: async (title, startDate, endDate, location) => {
-    // Check itinerary limit (max 10 per user)
+    // Check itinerary limit (tier-aware)
     const currentItineraries = get().itineraries;
-    if (currentItineraries.length >= 10) {
-      throw new Error('LIMIT_REACHED:You have reached the maximum limit of 10 itineraries. Please delete an existing itinerary before creating a new one.');
+    const itineraryLimit = useSubscription.getState().limits.itineraries;
+    if (itineraryLimit !== -1 && currentItineraries.length >= itineraryLimit) {
+      throw new Error(`LIMIT_REACHED:You have reached the maximum limit of ${itineraryLimit} itineraries. Upgrade to Premium for unlimited itineraries.`);
     }
 
     // Generate days between start and end date
@@ -368,12 +370,13 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
     const currentId = state.currentItineraryId;
     if (!currentId) return;
 
-    // Check event limit (max 20 events per itinerary)
+    // Check event limit (tier-aware)
+    const eventLimit = useSubscription.getState().limits.eventsPerItinerary;
     const currentItinerary = state.itineraries.find((it) => it.id === currentId);
-    if (currentItinerary) {
+    if (currentItinerary && eventLimit !== -1) {
       const totalEvents = currentItinerary.days.reduce((sum, day) => sum + day.events.length, 0);
-      if (totalEvents >= 20) {
-        throw new Error('LIMIT_REACHED:You have reached the maximum limit of 20 events for this itinerary. Please delete an existing event before adding a new one.');
+      if (totalEvents >= eventLimit) {
+        throw new Error(`LIMIT_REACHED:You have reached the maximum limit of ${eventLimit} events for this itinerary. Upgrade to Premium for unlimited events.`);
       }
     }
 
@@ -514,10 +517,11 @@ export const useItinerary = create<ItineraryState>()((set, get) => ({
   },
 
   cloneItinerary: async (source: Itinerary) => {
-    // Check itinerary limit
+    // Check itinerary limit (tier-aware)
     const currentItineraries = get().itineraries;
-    if (currentItineraries.length >= 10) {
-      throw new Error('LIMIT_REACHED:You have reached the maximum limit of 10 itineraries. Please delete an existing itinerary before adding a new one.');
+    const cloneLimit = useSubscription.getState().limits.itineraries;
+    if (cloneLimit !== -1 && currentItineraries.length >= cloneLimit) {
+      throw new Error(`LIMIT_REACHED:You have reached the maximum limit of ${cloneLimit} itineraries. Upgrade to Premium for unlimited itineraries.`);
     }
 
     const {

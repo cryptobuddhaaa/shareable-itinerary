@@ -227,8 +227,8 @@ function OverviewSection({ stats }: { stats: Stats | null }) {
           <StatCard label="Telegram" value={stats.telegramLinkedUsers} sub="Linked accounts" />
           <StatCard
             label="Subscriptions"
-            value={stats.subscriptionTiers.premium + stats.subscriptionTiers.pro}
-            sub={`${stats.subscriptionTiers.free} free / ${stats.subscriptionTiers.premium} premium / ${stats.subscriptionTiers.pro} pro`}
+            value={stats.subscriptionTiers.premium || 0}
+            sub={`${stats.subscriptionTiers.free || 0} free / ${stats.subscriptionTiers.premium || 0} premium`}
           />
         </div>
       </div>
@@ -406,6 +406,8 @@ function UserDetailPanel({ userId, onBack }: { userId: string; onBack: () => voi
   const [data, setData] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [resettingEnrichment, setResettingEnrichment] = useState(false);
+  const [changingTier, setChangingTier] = useState(false);
+  const [grantReason, setGrantReason] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -437,6 +439,56 @@ function UserDetailPanel({ userId, onBack }: { userId: string; onBack: () => voi
       alert('Failed to reset enrichment usage');
     }
     setResettingEnrichment(false);
+  };
+
+  const handleUpgradeUser = async () => {
+    if (!confirm(`Upgrade this user to Premium? Reason: ${grantReason || '(none)'}`)) return;
+    setChangingTier(true);
+    try {
+      const resp = await authFetch(`${API_BASE}?action=admin-upgrade-user`, {
+        method: 'POST',
+        body: JSON.stringify({ userId, reason: grantReason || 'Admin grant' }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error((err as { error?: string }).error || `HTTP ${resp.status}`);
+      }
+      // Update local state
+      setData(prev => prev ? {
+        ...prev,
+        subscription: { tier: 'premium', status: 'active', payment_provider: 'admin', admin_grant_reason: grantReason || 'Admin grant' },
+        enrichmentUsage: { ...prev.enrichmentUsage, limit: 100 },
+      } : prev);
+      setGrantReason('');
+    } catch (err) {
+      console.error('Failed to upgrade user:', err);
+      alert('Failed to upgrade user');
+    }
+    setChangingTier(false);
+  };
+
+  const handleDowngradeUser = async () => {
+    if (!confirm('Downgrade this user to Free tier? They will lose premium features.')) return;
+    setChangingTier(true);
+    try {
+      const resp = await authFetch(`${API_BASE}?action=admin-downgrade-user`, {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error((err as { error?: string }).error || `HTTP ${resp.status}`);
+      }
+      setData(prev => prev ? {
+        ...prev,
+        subscription: { tier: 'free', status: 'active' },
+        enrichmentUsage: { ...prev.enrichmentUsage, limit: 10 },
+      } : prev);
+    } catch (err) {
+      console.error('Failed to downgrade user:', err);
+      alert('Failed to downgrade user');
+    }
+    setChangingTier(false);
   };
 
   if (loading) return <LoadingSpinner />;
@@ -559,12 +611,56 @@ function UserDetailPanel({ userId, onBack }: { userId: string; onBack: () => voi
               {(w as Record<string, unknown>).verified_at ? <span className="text-green-400 ml-2 text-xs">Verified</span> : null}
             </p>
           ))}
-          {data.subscription && (
-            <p className="text-slate-300">
-              Subscription: <span className="text-white">{String((data.subscription as Record<string, unknown>).tier)}</span>
-              <span className="text-slate-500 ml-2">({String((data.subscription as Record<string, unknown>).status)})</span>
+          {/* Subscription tier with upgrade/downgrade controls */}
+          <div className="text-slate-300">
+            <p>
+              Subscription:{' '}
+              <span className={`font-bold ${(data.subscription as Record<string, unknown>)?.tier === 'premium' ? 'text-amber-400' : 'text-white'}`}>
+                {data.subscription ? String((data.subscription as Record<string, unknown>).tier) : 'free'}
+              </span>
+              {data.subscription && (
+                <span className="text-slate-500 ml-2">
+                  ({String((data.subscription as Record<string, unknown>).status)})
+                  {String((data.subscription as Record<string, unknown>).payment_provider || '') && (
+                    <> via {String((data.subscription as Record<string, unknown>).payment_provider)}</>
+                  )}
+                </span>
+              )}
+              {String((data.subscription as Record<string, unknown>)?.admin_grant_reason || '') && (
+                <span className="text-slate-500 ml-2 text-xs italic">
+                  — {String((data.subscription as Record<string, unknown>).admin_grant_reason)}
+                </span>
+              )}
             </p>
-          )}
+            <div className="flex items-center gap-2 mt-2">
+              {(!data.subscription || (data.subscription as Record<string, unknown>).tier !== 'premium') ? (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Grant reason (e.g., Early adopter)"
+                    value={grantReason}
+                    onChange={(e) => setGrantReason(e.target.value)}
+                    className="px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 w-48"
+                  />
+                  <button
+                    onClick={handleUpgradeUser}
+                    disabled={changingTier}
+                    className="px-3 py-1 text-xs bg-amber-600 text-white rounded hover:bg-amber-500 disabled:opacity-40"
+                  >
+                    {changingTier ? 'Upgrading...' : 'Upgrade to Premium'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleDowngradeUser}
+                  disabled={changingTier}
+                  className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500 disabled:opacity-40"
+                >
+                  {changingTier ? 'Downgrading...' : 'Downgrade to Free'}
+                </button>
+              )}
+            </div>
+          </div>
           {p?.twitter_handle ? (
             <p className="text-slate-300">X: <span className="text-white">@{String(p.twitter_handle)}</span></p>
           ) : null}

@@ -73,10 +73,26 @@ export async function handleEnrich(chatId: number, telegramUserId: number, args:
   // Check usage
   const usage = await getUsage(userId);
   if (usage.used >= usage.limit) {
-    await sendMessage(
-      chatId,
-      `❌ You've used all ${usage.limit} enrichments this month (${usage.used}/${usage.limit}).`
-    );
+    const isPremium = usage.tier === 'premium';
+    if (isPremium) {
+      await sendMessage(
+        chatId,
+        `❌ You've used all ${usage.limit} enrichments this month (${usage.used}/${usage.limit}).`
+      );
+    } else {
+      await sendMessage(
+        chatId,
+        `❌ You've used all ${usage.limit} free enrichments this month (${usage.used}/${usage.limit}).\n\n` +
+          '⭐ <b>Upgrade to Premium</b> for 100 enrichments/month, enhanced AI, and more!',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '⭐ Subscribe to Premium', callback_data: 'sb:back' }],
+            ],
+          },
+        }
+      );
+    }
     return;
   }
 
@@ -266,7 +282,17 @@ export async function handleEnrichCallback(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Unknown error';
     if (errMsg.includes('LIMIT_REACHED')) {
-      await sendMessage(chatId, `❌ Monthly enrichment limit reached.`);
+      await sendMessage(
+        chatId,
+        '❌ Monthly enrichment limit reached.\n\n⭐ Upgrade to Premium for 100 enrichments/month!',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '⭐ Subscribe to Premium', callback_data: 'sb:back' }],
+            ],
+          },
+        }
+      );
     } else {
       await sendMessage(chatId, `❌ Enrichment failed: ${escapeHtml(errMsg)}`);
     }

@@ -71,6 +71,12 @@ import {
   handleEnrich,
   handleEnrichCallback,
 } from './_flows/enrichment.js';
+import {
+  handleSubscribe,
+  handleSubscribeCallback,
+  handlePreCheckoutQuery,
+  handleSuccessfulPayment,
+} from './_flows/subscribe.js';
 
 // --- Text input router ---
 
@@ -144,7 +150,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const update = req.body;
 
+    // --- Pre-checkout query (Telegram Stars payments) ---
+    if (update.pre_checkout_query) {
+      await handlePreCheckoutQuery(update.pre_checkout_query);
+      return res.status(200).json({ ok: true });
+    }
+
     if (update.message) {
+      // --- Successful payment (Telegram Stars) ---
+      if (update.message.successful_payment) {
+        const chatId: number = update.message.chat.id;
+        const telegramUserId: number = update.message.from.id;
+        await handleSuccessfulPayment(chatId, telegramUserId, update.message.successful_payment);
+        return res.status(200).json({ ok: true });
+      }
       const msg = update.message;
       const chatId: number = msg.chat.id;
       const telegramUserId: number = msg.from.id;
@@ -196,6 +215,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (text.startsWith('/enrich')) {
         const args = text.substring('/enrich'.length).trim();
         await handleEnrich(chatId, telegramUserId, args);
+      } else if (text === '/subscribe') {
+        await handleSubscribe(chatId, telegramUserId);
       } else if (text === '/cancel') {
         await clearState(telegramUserId);
         await sendMessage(chatId, '❌ Cancelled. Use /help for commands.');
@@ -222,6 +243,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '/enrich — Pick a contact to research with AI\n' +
             '/enrich @handle — Enrich by Telegram handle\n' +
             '/enrich Name, Company — Enrich a specific contact\n\n' +
+            '⭐ <b>Premium</b>\n' +
+            '/subscribe — Upgrade to Convenu Premium\n\n' +
             '⚡ <b>Quick Actions</b>\n' +
             '• <b>Forward a message</b> → saves a note on the contact, or creates a new contact\n' +
             '• <b>Paste Luma links</b> during /newevent → auto-imports event details\n\n' +
@@ -332,6 +355,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // --- Enrichment callbacks ---
       else if (data.startsWith('en:')) {
         await handleEnrichCallback(chatId, telegramUserId, data.substring(3), cq.id);
+      }
+      // --- Subscribe callbacks ---
+      else if (data.startsWith('sb:')) {
+        await handleSubscribeCallback(chatId, telegramUserId, data.substring(3), cq.id);
       }
     }
 

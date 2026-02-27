@@ -228,4 +228,36 @@ export interface ContactEnrichment {
 export interface EnrichmentUsage {
   used: number;
   limit: number;
+  tier?: string;
+}
+
+// --- Subscription ---
+
+export type Tier = 'free' | 'premium';
+export type PaymentProvider = 'stripe' | 'solana' | 'telegram_stars' | 'admin';
+export type BillingPeriod = 'monthly' | 'annual';
+
+export interface TierLimits {
+  itineraries: number;       // -1 = unlimited
+  eventsPerItinerary: number;
+  contacts: number;
+  enrichments: number;
+  tags: number;
+  templates: number;
+  notes: number;
+  batchEnrich: boolean;
+  enhancedEnrich: boolean;
+}
+
+export interface SubscriptionInfo {
+  tier: Tier;
+  status: string;
+  paymentProvider: PaymentProvider | null;
+  billingPeriod: BillingPeriod | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  adminGrantedBy: string | null;
+  adminGrantReason: string | null;
+  limits: TierLimits;
 }

@@ -10,6 +10,7 @@ import { toast } from './Toast';
 import { ConfirmDialog, useConfirmDialog } from './ConfirmDialog';
 import { HandshakeButton } from './HandshakeButton';
 import { useAuth } from '../hooks/useAuth';
+import { useSubscription } from '../hooks/useSubscription';
 
 function getTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -185,16 +186,16 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
     }
   };
 
-  const handleEnrich = async (contact: Contact) => {
+  const handleEnrich = async (contact: Contact, enhanced?: boolean) => {
     const name = `${contact.firstName} ${contact.lastName}`;
     const context = [contact.projectCompany, contact.position].filter(Boolean).join(', ') || undefined;
     try {
-      await enrich(contact.id, name, context);
+      await enrich(contact.id, name, context, enhanced);
       toast.success(`Profile enriched for ${contact.firstName}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Enrichment failed';
       if (msg.includes('LIMIT_REACHED')) {
-        toast.error('Monthly enrichment limit reached (10/10).');
+        toast.error(`Monthly enrichment limit reached (${usage.used}/${usage.limit}).`);
       } else {
         toast.error(msg);
       }
@@ -469,8 +470,9 @@ export default function ContactsList({ itineraryId, contacts: providedContacts }
             {getByContactId(contact.id) && (
               <EnrichmentPanel
                 enrichment={getByContactId(contact.id)!}
-                onRegenerate={() => handleEnrich(contact)}
+                onRegenerate={(enhanced) => handleEnrich(contact, enhanced)}
                 regenerating={enrichingContactId === contact.id}
+                isPremium={useSubscription.getState().isPremium}
               />
             )}
 

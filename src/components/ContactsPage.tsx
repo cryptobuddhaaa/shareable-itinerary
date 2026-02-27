@@ -7,6 +7,8 @@ import ContactsList from './ContactsList';
 import ContactForm from './ContactForm';
 import FollowUpDialog from './FollowUpDialog';
 import { toast } from './Toast';
+import { useSubscription } from '../hooks/useSubscription';
+import { UpgradeModal } from './UpgradeModal';
 import { isTelegramWebApp, openTelegramLink } from '../lib/telegram';
 import {
   generateTelegramLinkCode,
@@ -20,7 +22,8 @@ export default function ContactsPage() {
   const { user } = useAuth();
   const { contacts, tags, addTag, deleteTag, initialize } = useContacts();
   const { initialize: initializeHandshakes } = useHandshakes();
-  const { usage } = useEnrichment();
+  const { usage, batchEnrich, batchEnriching } = useEnrichment();
+  const { isPremium } = useSubscription();
 
   // Auto-refresh contacts and handshakes when tab is opened (component mounts)
   useEffect(() => {
@@ -37,6 +40,8 @@ export default function ContactsPage() {
   const [linkLoading, setLinkLoading] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
   const [showTagManager, setShowTagManager] = useState(false);
   const [newTagName, setNewTagName] = useState('');
 
@@ -225,6 +230,83 @@ export default function ContactsPage() {
     }
   };
 
+  const exportToVCard = () => {
+    if (!isPremium) {
+      setUpgradeReason('vCard export is a Premium feature');
+      setShowUpgradeModal(true);
+      return;
+    }
+    if (filteredAndSortedContacts.length === 0) {
+      toast.info('No contacts to export');
+      return;
+    }
+
+    const vcards = filteredAndSortedContacts.map((c) => {
+      const lines = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `N:${c.lastName};${c.firstName};;;`,
+        `FN:${c.firstName} ${c.lastName}`,
+      ];
+      if (c.projectCompany) lines.push(`ORG:${c.projectCompany}`);
+      if (c.position) lines.push(`TITLE:${c.position}`);
+      if (c.email) lines.push(`EMAIL:${c.email}`);
+      if (c.telegramHandle) lines.push(`X-SOCIALPROFILE;type=telegram:${c.telegramHandle}`);
+      if (c.linkedin) lines.push(`URL:${c.linkedin}`);
+      if (c.notes) lines.push(`NOTE:${c.notes.replace(/\n/g, '\\n')}`);
+      if (c.tags && c.tags.length > 0) lines.push(`CATEGORIES:${c.tags.join(',')}`);
+      lines.push('END:VCARD');
+      return lines.join('\r\n');
+    });
+
+    const blob = new Blob([vcards.join('\r\n')], { type: 'text/vcard;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `contacts_${new Date().toISOString().split('T')[0]}.vcf`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleBatchEnrich = async () => {
+    if (!isPremium) {
+      setUpgradeReason('Batch enrichment is a Premium feature');
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    // Pick up to 10 unenriched contacts
+    const { getByContactId: getEnrich } = useEnrichment.getState();
+    const unenriched = filteredAndSortedContacts
+      .filter((c) => !getEnrich(c.id))
+      .slice(0, 10);
+
+    if (unenriched.length === 0) {
+      toast.info('All visible contacts are already enriched');
+      return;
+    }
+
+    const batch = unenriched.map((c) => ({
+      contactId: c.id,
+      name: `${c.firstName} ${c.lastName}`,
+      context: [c.projectCompany, c.position].filter(Boolean).join(', ') || undefined,
+    }));
+
+    try {
+      const results = await batchEnrich(batch);
+      toast.success(`Enriched ${results.length} contacts`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Batch enrichment failed';
+      toast.error(msg);
+    }
+  };
+
   return (
     <div>
       <div className="mb-6">
@@ -275,6 +357,33 @@ export default function ContactsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Export CSV
+              </button>
+              <button
+                onClick={exportToVCard}
+                className={`inline-flex items-center px-3 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-amber-500 ${
+                  isPremium
+                    ? 'border-amber-600/50 text-amber-300 bg-amber-900/30 hover:bg-amber-900/50'
+                    : 'border-slate-600 text-slate-400 bg-slate-700 hover:bg-slate-600'
+                }`}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                </svg>
+                Export vCard{!isPremium && ' *'}
+              </button>
+              <button
+                onClick={handleBatchEnrich}
+                disabled={batchEnriching}
+                className={`inline-flex items-center px-3 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-purple-500 ${
+                  isPremium
+                    ? 'border-purple-600/50 text-purple-300 bg-purple-900/30 hover:bg-purple-900/50'
+                    : 'border-slate-600 text-slate-400 bg-slate-700 hover:bg-slate-600'
+                } disabled:opacity-50`}
+              >
+                <svg className={`w-4 h-4 mr-2 ${batchEnriching ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                {batchEnriching ? 'Enriching...' : `Enrich All${!isPremium ? ' *' : ''}`}
               </button>
             </>
           )}
@@ -499,6 +608,12 @@ export default function ContactsPage() {
       {showFollowUp && (
         <FollowUpDialog onClose={() => setShowFollowUp(false)} />
       )}
+
+      <UpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        triggerReason={upgradeReason}
+      />
     </div>
   );
 }

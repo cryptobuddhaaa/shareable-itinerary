@@ -16,11 +16,14 @@
  *   admin-signups     — Signup trend data (daily, by method)
  *   admin-handshake-funnel — Handshake status funnel counts
  *   admin-reset-enrichment — Reset a user's monthly enrichment usage to 0
+ *   admin-upgrade-user     — Upgrade a user to premium (admin grant)
+ *   admin-downgrade-user   — Downgrade a user to free tier
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdmin } from './admin-auth.js';
+import { activateSubscription, downgradeSubscription } from './subscription.js';
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
@@ -70,6 +73,12 @@ export async function handleAdminAction(
       return;
     case 'admin-reset-enrichment':
       await handleResetEnrichment(req, res);
+      return;
+    case 'admin-upgrade-user':
+      await handleUpgradeUser(admin, req, res);
+      return;
+    case 'admin-downgrade-user':
+      await handleDowngradeUser(req, res);
       return;
     default:
       res.status(400).json({ error: `Unknown admin action: ${action}` });
@@ -347,7 +356,7 @@ async function handleUserDetail(req: VercelRequest, res: VercelResponse) {
       subscription: subscriptionRes.data || null,
       enrichmentUsage: {
         used: (enrichmentUsageRes.data as { usage_count: number } | null)?.usage_count ?? 0,
-        limit: 10,
+        limit: subscriptionRes.data && (subscriptionRes.data as Record<string, unknown>).tier === 'premium' ? 100 : 10,
         month: currentMonth,
       },
     });
@@ -651,5 +660,60 @@ async function handleHandshakeFunnel(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error('Admin handshake funnel error:', error);
     res.status(500).json({ error: 'Failed to load handshake funnel' });
+  }
+}
+
+// ─── admin-upgrade-user ──────────────────────────────────────────────────────
+
+async function handleUpgradeUser(
+  admin: { id: string; role: string },
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const userId = String(req.body?.userId || '');
+  const reason = String(req.body?.reason || 'Admin grant').slice(0, 500);
+
+  if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) {
+    return res.status(400).json({ error: 'Valid userId required' });
+  }
+
+  try {
+    await activateSubscription(userId, 'admin', 'monthly', {
+      adminGrantedBy: admin.id,
+      adminGrantReason: reason,
+    });
+
+    console.log(`[Admin] ${admin.id} upgraded user ${userId} to premium. Reason: ${reason}`);
+    res.status(200).json({ success: true, tier: 'premium', reason });
+  } catch (error) {
+    console.error('Admin upgrade user error:', error);
+    res.status(500).json({ error: 'Failed to upgrade user' });
+  }
+}
+
+// ─── admin-downgrade-user ────────────────────────────────────────────────────
+
+async function handleDowngradeUser(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const userId = String(req.body?.userId || '');
+  if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) {
+    return res.status(400).json({ error: 'Valid userId required' });
+  }
+
+  try {
+    await downgradeSubscription(userId);
+
+    console.log(`[Admin] Downgraded user ${userId} to free`);
+    res.status(200).json({ success: true, tier: 'free' });
+  } catch (error) {
+    console.error('Admin downgrade user error:', error);
+    res.status(500).json({ error: 'Failed to downgrade user' });
   }
 }
