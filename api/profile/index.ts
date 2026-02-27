@@ -111,6 +111,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const pricing = await getSubscriptionSolAmount(period);
       const treasuryWallet = process.env.TREASURY_WALLET || process.env.VITE_TREASURY_WALLET || '';
+      if (!treasuryWallet) {
+        return res.status(503).json({ error: 'Solana payments not configured. Please contact support.' });
+      }
       return res.status(200).json({
         ...pricing,
         treasuryWallet,
@@ -457,11 +460,11 @@ async function handleSolanaConfirm(userId: string, req: VercelRequest, res: Verc
   }
 
   const billingPeriod = (period === 'annual' ? 'annual' : 'monthly') as BillingPeriod;
-  const SOLANA_RPC = process.env.SOLANA_RPC_URL || process.env.VITE_SOLANA_RPC_URL || '';
+  const SOLANA_RPC = process.env.SOLANA_RPC_URL || process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
   const TREASURY_WALLET = process.env.TREASURY_WALLET || process.env.VITE_TREASURY_WALLET || '';
 
-  if (!SOLANA_RPC || !TREASURY_WALLET) {
-    return res.status(503).json({ error: 'Solana not configured' });
+  if (!TREASURY_WALLET) {
+    return res.status(503).json({ error: 'Solana treasury wallet not configured' });
   }
 
   try {
