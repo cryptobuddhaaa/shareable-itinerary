@@ -429,6 +429,35 @@ export default function ProfilePage() {
                 </span>
               </div>
             ) : null}
+
+            <div className="space-y-1.5 text-sm">
+              {[
+                ['Itineraries', limits.itineraries],
+                ['Events per trip', limits.eventsPerItinerary],
+                ['Contacts', limits.contacts],
+                ['AI enrichments/mo', limits.enrichments],
+                ['Tags', limits.tags],
+                ['Templates', limits.templates],
+              ].map(([label, value]) => (
+                <div key={label as string} className="flex items-center justify-between py-1">
+                  <span className="text-slate-400">{label as string}</span>
+                  <span className="text-slate-200">{(value as number) === -1 ? 'Unlimited' : String(value)}</span>
+                </div>
+              ))}
+              {limits.batchEnrich && (
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-slate-400">Batch enrich</span>
+                  <span className="text-green-400">Enabled</span>
+                </div>
+              )}
+              {limits.enhancedEnrich && (
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-slate-400">Enhanced AI</span>
+                  <span className="text-green-400">Enabled</span>
+                </div>
+              )}
+            </div>
+
             {subscription?.paymentProvider === 'stripe' ? (
               <button
                 onClick={() => { stripePortal().catch((e: Error) => toast.error(e.message)); }}
