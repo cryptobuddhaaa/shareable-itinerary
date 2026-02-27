@@ -89,7 +89,7 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 - Telegram bot link/unlink integration
 
 **Labels/Tags**:
-- Create labels (up to 10, max 20 chars each)
+- Create labels (up to 10 free / 25 premium, max 20 chars each)
 - Filter contacts by label
 - Manage labels (create/delete)
 - Assign up to 3 labels per contact
@@ -108,12 +108,17 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 
 **AI Contact Enrichment** (`EnrichmentPanel`):
 - Trigger via sparkle button on contact card
-- Uses Brave Search API + Claude Haiku to build a profile
+- Uses Brave Search API + Claude Haiku (free) or Claude Sonnet (premium Enhanced AI) to build a profile
 - Displays: professional summary, current role, key achievements, social links, notable projects
 - Confidence badge (high/medium/low)
-- Regenerate button
-- Usage tracking: 10 enrichments/month per user
+- Regenerate button with optional "Enhanced AI" toggle (premium only — uses Sonnet model for deeper analysis)
+- Usage tracking: 10 enrichments/month (free) / 100 enrichments/month (premium)
 - Expandable/collapsible panel inline on contact card
+- Batch enrichment: "Enrich All" button enriches up to 10 unenriched contacts at once (premium only)
+
+**vCard Export** (premium):
+- Export contacts as `.vcf` file with name, company, position, email, telegram, linkedin, tags
+- Available via "Export vCard" button in contacts toolbar
 
 **Follow-Up Dialog** (`FollowUpDialog`):
 - 4-step flow: Select contacts → Compose message → (optionally Create template) → Send
@@ -197,6 +202,43 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 - Uniqueness: one X account per Convenu user
 - Revokes refresh token on disconnect
 
+**Subscription Section**:
+- Shows current tier (Free/Premium) with badge
+- Free users: feature comparison + "Upgrade to Premium" button → opens `UpgradeModal`
+- Premium (Stripe): "Manage Subscription" button → Stripe Customer Portal
+- Premium (Solana/Stars): Expiration date + "Renew" button
+- Premium (Admin-granted): "Gifted by admin" note
+
+---
+
+### Premium Subscription (`UpgradeModal`)
+
+**Tiers**: Free / Premium ($5/month or $45/year — save $15)
+
+**Free Tier Limits**:
+- 10 itineraries, 20 events/itinerary, 100 contacts
+- 10 AI enrichments/month (Haiku only)
+- 10 tags, 3 custom templates, 10 notes/contact
+- No batch enrichment, no vCard export, no enhanced AI
+
+**Premium Features**:
+- Unlimited itineraries, events, contacts, notes
+- 100 AI enrichments/month
+- Enhanced AI toggle (Sonnet model for deeper profiles)
+- Batch enrichment (up to 10 contacts at once)
+- vCard export (.vcf)
+- 25 tags, 10 custom templates
+
+**Payment Providers**:
+- **Stripe** (card): Auto-renewal via Checkout Sessions + Customer Portal for management
+- **Solana Pay**: Manual renewal, SOL amount calculated from CoinGecko USD price (5-min cache)
+- **Telegram Stars**: Manual renewal via Bot API invoicing (350 Stars/month, 3000 Stars/year)
+- **Admin Grant**: Super admin can upgrade users to premium (perpetual unless time-limited)
+
+**Renewal Behavior**:
+- Stripe: auto-renews, webhook handles cancel/failure → downgrade
+- Solana/Stars: manual renewal, expiry tracked via `current_period_end`
+
 ---
 
 ### Handshake Flow (Proof of Handshake)
@@ -234,7 +276,7 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 - Accessible via `/admin` URL path
 - Requires authenticated user (admin check via `admin_users` table)
 - **Overview**: Key metrics (total users, DAU/WAU/MAU, stickiness %, handshake counts, wallet stats, contacts, itineraries, points, Telegram-linked users)
-- **Users**: Searchable paginated user table with trust score, wallet, X, Telegram per row; drill-down to user detail
+- **Users**: Searchable paginated user table with trust score, wallet, X, Telegram per row; drill-down to user detail with upgrade/downgrade buttons
 - **Handshakes**: Filterable list (by status, date) + funnel visualization (pending → matched → minted)
 - **Events**: Top events by handshake count
 - **Trust**: Score distribution histogram + per-tier averages
@@ -281,6 +323,7 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 | `/trust` | View full trust score breakdown (ASCII bar chart) |
 | `/points` | View points balance and recent history |
 | `/shakehistory` | View handshake history with status |
+| `/subscribe` | Upgrade to Premium via Telegram Stars payment |
 | `/cancel` | Cancel current conversation state |
 | `/help` | Show available commands with "Open App" button |
 
@@ -331,7 +374,7 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 
 ### Callback Prefixes (for inline keyboards)
 
-`it:`, `ev:`, `cf:` (contact confirm), `ed:`, `yc:`, `ye:`, `xi:`, `xl:`, `xd:`, `xt:`, `xc:`, `xe:`, `iv:`, `tg:`, `fw:`, `fn:`, `hs:`, `cl:`, `ce:`, `cd:` (contacts date-filter), `cv:`, `cx:`, `en:`
+`it:`, `ev:`, `cf:` (contact confirm), `ed:`, `yc:`, `ye:`, `xi:`, `xl:`, `xd:`, `xt:`, `xc:`, `xe:`, `iv:`, `tg:`, `fw:`, `fn:`, `hs:`, `cl:`, `ce:`, `cd:` (contacts date-filter), `cv:`, `cx:`, `en:`, `sb:` (subscribe)
 
 ---
 
@@ -349,7 +392,16 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 | GET | `?action=telegram-status` | Check Telegram link status |
 | POST | `?action=generate-link-code` | Generate Telegram link code |
 | DELETE | `?action=unlink-telegram` | Unlink Telegram account |
+| GET | `?action=subscription` | Get subscription status + tier + limits |
+| POST | `?action=stripe-checkout` | Create Stripe Checkout session |
+| POST | `?action=stripe-portal` | Create Stripe Customer Portal session |
+| POST | `?action=stripe-webhook` | Stripe webhook handler (no auth) |
+| POST | `?action=solana-checkout` | Get SOL amount for subscription payment |
+| POST | `?action=solana-confirm` | Verify on-chain SOL payment, activate subscription |
+| POST | `?action=batch-enrich` | Batch enrich up to 10 contacts (premium only) |
 | GET/POST | `?action=admin-*` | Admin panel data (admin-gated) |
+| POST | `?action=admin-upgrade-user` | Admin: upgrade user to premium |
+| POST | `?action=admin-downgrade-user` | Admin: downgrade user to free |
 
 ### Auth (`api/auth/index.ts`)
 | Method | Action | Description |
@@ -394,7 +446,8 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 | `useContacts` | `src/hooks/useContacts.ts` | Contacts CRUD, tags, search |
 | `useHandshakes` | `src/hooks/useHandshakes.ts` | Handshake lifecycle, lookups |
 | `useUserWallet` | `src/hooks/useUserWallet.ts` | Wallet link/verify/unlink |
-| `useEnrichment` | `src/hooks/useEnrichment.ts` | Enrichment data + usage tracking |
+| `useEnrichment` | `src/hooks/useEnrichment.ts` | Enrichment data + usage tracking + batch |
+| `useSubscription` | `src/hooks/useSubscription.ts` | Subscription tier, limits, payment actions |
 | `useAuth` | `src/hooks/useAuth.tsx` | Auth context (Supabase session) |
 
 ---

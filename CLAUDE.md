@@ -49,9 +49,15 @@ npx tsc -b --noEmit  # Type-check only
 - `VITE_SOLANA_RPC_URL` — Solana RPC (Helius/QuickNode)
 - `VITE_TREASURY_WALLET` — SOL fee recipient
 
+**Required for Stripe payments:**
+- `STRIPE_SECRET_KEY` — Stripe API key
+- `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret
+- `STRIPE_PRICE_ID_MONTHLY` — Stripe Price ID for $5/month plan
+- `STRIPE_PRICE_ID_ANNUAL` — Stripe Price ID for $45/year plan
+
 **Optional:**
 - `BRAVE_SEARCH_API_KEY` — Brave Search API for contact enrichment (free tier: 2,000 queries/month)
-- `ANTHROPIC_API_KEY` — Claude Haiku for contact enrichment LLM summarization
+- `ANTHROPIC_API_KEY` — Claude Haiku/Sonnet for contact enrichment LLM summarization
 - `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_CALLBACK_URL` — X OAuth
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — Google Calendar
 - `HANDSHAKE_TREE_KEYPAIR`, `HANDSHAKE_MERKLE_TREE` — cNFT minting
@@ -89,11 +95,19 @@ npx tsc -b --noEmit  # Type-check only
 
 10. **Follow-Up dialog was renamed** — `InviteDialog.tsx` was renamed to `FollowUpDialog.tsx`. The button in `ContactsPage.tsx` says "Follow-Up" (not "Invite"). Internal state variables use `showFollowUp` / `setShowFollowUp`.
 
-11. **Telegram callback prefix collisions** — Callback prefixes must be globally unique across all flows. Notably, `cf:` is used by contact confirmation (`cf:yes`/`cf:no` in `/newcontact`). The contacts date-filter uses `cd:` to avoid collision. Before adding a new callback prefix, grep for `data.startsWith('` in `webhook.ts` to check for conflicts. Current prefixes: `it:`, `ev:`, `cf:` (contact confirm), `ed:`, `yc:`, `ye:`, `xi:`, `xl:`, `xd:`, `xt:`, `xc:`, `xe:`, `iv:`, `tg:`, `fw:`, `fn:`, `hs:`, `cl:`, `ce:`, `cd:` (contacts date-filter), `cv:`, `cx:`, `en:`.
+11. **Telegram callback prefix collisions** — Callback prefixes must be globally unique across all flows. Notably, `cf:` is used by contact confirmation (`cf:yes`/`cf:no` in `/newcontact`). The contacts date-filter uses `cd:` to avoid collision. Before adding a new callback prefix, grep for `data.startsWith('` in `webhook.ts` to check for conflicts. Current prefixes: `it:`, `ev:`, `cf:` (contact confirm), `ed:`, `yc:`, `ye:`, `xi:`, `xl:`, `xd:`, `xt:`, `xc:`, `xe:`, `iv:`, `tg:`, `fw:`, `fn:`, `hs:`, `cl:`, `ce:`, `cd:` (contacts date-filter), `cv:`, `cx:`, `en:`, `sb:` (subscribe).
 
 12. **Contacts date filter + pagination** — The `/contacts` → "All Contacts" flow shows a date filter menu (Today, Last 3 Days, Last Week, Last Month, All Time) before listing contacts. Results are paginated at 10 per page with a "More ›" button. Callbacks use `cd:` prefix (`cd:today`, `cd:3d:10` for pagination). The `showContactsList()` function accepts optional `dateFilter`, `offset`, and `filterKey` params. Itinerary/event-scoped views bypass the date filter and show contacts directly.
 
 13. **Telegram handle storage and lookup** — Handles are stored WITH the `@` prefix (e.g., `@johndoe`). When querying by handle, always use `.or(\`telegram_handle.ilike.@${handle},telegram_handle.ilike.${handle}\`)` to match both formats. The correct pattern is in `forward.ts`; `enrichment.ts` and `handshake.ts` also use this pattern.
+
+14. **Subscription & tier-aware limits** — Tier detection lives in `api/_lib/subscription.ts` (`getUserTier()`, `getTierLimits()`). The `subscriptions` table is extended for multi-provider support (Stripe, Solana, Telegram Stars, Admin) via `sql/extend-subscriptions-multi-provider.sql`. Client-side limits are read from `useSubscription.getState().limits` (Zustand store at `src/hooks/useSubscription.ts`). Server-side enrichment limits use `getUserTier()` + `getTierLimits()`. `-1` means unlimited in the limits config. Admin grants use `payment_provider: 'admin'` with `current_period_end: null` for perpetual access. Solana/Stars payments have `current_period_end` set to 30/365 days from activation. The `get_user_tier()` SQL function also checks period expiry.
+
+15. **Stripe webhook authentication** — The `?action=stripe-webhook` endpoint in `api/profile/index.ts` does NOT use JWT auth — it verifies Stripe's webhook signature via `stripe.webhooks.constructEvent()`. It must be routed before the `requireAuth()` check. The webhook handles `checkout.session.completed`, `customer.subscription.updated/deleted`, and `invoice.payment_failed`.
+
+16. **Telegram Stars payment flow** — `/subscribe` command shows pricing with inline keyboard. User taps Monthly/Annual → `createInvoiceLink` generates a Telegram Stars payment link. The webhook handles `pre_checkout_query` (validation) and `successful_payment` (activation) update types before the `update.message` routing. Payment handler is in `api/telegram/_flows/subscribe.ts`.
+
+17. **UpgradeModal is a named export** — Import as `import { UpgradeModal } from './UpgradeModal'`, not default import. Used in both `ProfilePage.tsx` and `ContactsPage.tsx`.
 
 ## Testing Checklist
 
@@ -115,3 +129,18 @@ Before deploying, verify:
 - [ ] Follow-Up: date filter presets (Today, This week, etc.) and custom range filter contacts correctly
 - [ ] Follow-Up: "+ Custom" opens dedicated template screen with variable chips and live preview
 - [ ] Follow-Up: "Copy Message & Open DM" copies actual message (not @convenubot) in Telegram Mini App
+- [ ] Subscription: `GET ?action=subscription` returns correct tier + limits
+- [ ] Subscription: Free user sees current limits (10 itineraries, 100 contacts, 10 enrichments/mo)
+- [ ] Subscription: Hitting a limit shows upgrade modal with pricing
+- [ ] Subscription: Stripe checkout creates session and redirects to Stripe
+- [ ] Subscription: Stripe webhook activates premium after successful payment
+- [ ] Subscription: Solana checkout returns correct SOL amount from CoinGecko price
+- [ ] Subscription: Premium user gets 100 enrichments, unlimited contacts/itineraries
+- [ ] Subscription: Enhanced AI toggle on enrichment panel uses Sonnet for premium users
+- [ ] Subscription: Batch "Enrich All" enriches up to 10 unenriched contacts (premium only)
+- [ ] Subscription: vCard export downloads .vcf file (premium only)
+- [ ] Subscription: Admin can upgrade/downgrade users from AdminDashboard
+- [ ] Subscription: Profile page shows subscription section with correct tier info
+- [ ] Telegram `/subscribe` shows pricing with Stars payment options
+- [ ] Telegram `/subscribe` → Monthly/Annual → payment link generated
+- [ ] Telegram enrichment limit shows upgrade CTA for free users
