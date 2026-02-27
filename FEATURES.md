@@ -50,7 +50,13 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 **Event Form** (`EventForm`):
 - Manual entry: title, date/time, location (name, address, coordinates), type, notes
 - Luma event import: paste lu.ma URL, auto-fetches event details + location
-- Event types: Conference, Meetup, Workshop, Dinner, Party, Other
+- Event types: Meeting, Travel, Meal, Buffer, Accommodation, Activity, Side-event, Main-conference
+
+**Share Dialog** (`ShareDialog`):
+- Auto-generated shareable URL with copy button
+- "Sharing X of Y days, N of M events" summary
+- Selectively hide days or individual events from shared view
+- "Update shared link" button
 
 ---
 
@@ -93,8 +99,12 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 - Delete contact with confirmation
 - Handshake button (`HandshakeButton`) — initiate Proof of Handshake
 - AI enrichment sparkle button — trigger `EnrichmentPanel`
-- Contact details: name, company/position, telegram handle, email, notes, event, date met
-- "Last contacted" timestamp tracking
+- Mark as contacted (clock icon — sets `lastContactedAt` timestamp; toggles to clear)
+- Contact details: name, company/position, telegram handle (link to t.me), email (mailto), LinkedIn (link), notes, event, date met
+- Tag chips (colored pill labels)
+- Inline "Add note" input (max 200 chars, 10 notes per contact, timestamped)
+- "Contacted X days/weeks ago" green indicator
+- Handshake status inline (pending/claimed/matched/minted with Solana Explorer link)
 
 **AI Contact Enrichment** (`EnrichmentPanel`):
 - Trigger via sparkle button on contact card
@@ -222,7 +232,13 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 
 **Admin Dashboard** (`/admin`):
 - Accessible via `/admin` URL path
-- Requires authenticated user (admin check inside component)
+- Requires authenticated user (admin check via `admin_users` table)
+- **Overview**: Key metrics (total users, DAU/WAU/MAU, stickiness %, handshake counts, wallet stats, contacts, itineraries, points, Telegram-linked users)
+- **Users**: Searchable paginated user table with trust score, wallet, X, Telegram per row; drill-down to user detail
+- **Handshakes**: Filterable list (by status, date) + funnel visualization (pending → matched → minted)
+- **Events**: Top events by handshake count
+- **Trust**: Score distribution histogram + per-tier averages
+- **Signups**: Daily signup trend chart
 
 **Handshake Claim Page** (`?claim={id}`):
 - Standalone page for claiming handshakes from shared links
@@ -230,7 +246,16 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 
 **Login Page** (`Login`):
 - Shown when not authenticated
-- Supabase auth (Google OAuth, email/password)
+- "Sign in with Google" button (OAuth via Supabase)
+- "Sign in with Telegram" button (shown only inside Telegram Mini App, uses `initData`-based JWT)
+
+**Handshake Claim Page** details:
+1. Not logged in → prompt to sign in
+2. Logged in, no wallet → generate magic link for wallet browser (preserves `?claim=` in URL)
+3. Wallet connected but not verified → auto-runs verify flow (sign message)
+4. Wallet verified → show initiator name + fee info → sign 0.01 SOL transaction
+5. Both parties paid → auto-triggers minting
+6. Success screen with points earned → "Go to app" returns to Dashboard
 
 ---
 
@@ -243,15 +268,21 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Welcome message + account linking (with link code from web app) |
-| `/start {linkCode}` | Links Telegram account to existing web account |
+| `/start` | Welcome message; with link code, links Telegram to web account |
 | `/newcontact` | Add a new contact — pick from Telegram contacts or enter manually |
-| `/contacts` | Browse contacts — "All Contacts" (with date filter + pagination) or by itinerary/event |
-| `/handshake` | Initiate a Proof of Handshake (interactive contact picker) |
-| `/handshake @handle` | Initiate handshake with specific Telegram user |
-| `/enrich` | AI-enrich a contact (shows picker, or auto-enriches last saved contact) |
-| `/enrich @handle` | Enrich contact by Telegram handle |
-| `/help` | Show available commands |
+| `/newitinerary` | Create a new trip (title, dates, location, goals) |
+| `/newevent` | Add an event to a trip (manual or Luma URL import) |
+| `/contacts` | Browse contacts — "All Contacts" (date filter + pagination) or by itinerary/event |
+| `/contacted @handle` | Mark a contact as reached out to |
+| `/itineraries` / `/events` | Browse trips and events |
+| `/today` | Show today's events across all trips |
+| `/handshake [@handle]` | Initiate a Proof of Handshake (interactive picker or direct) |
+| `/enrich [@handle]` | AI-enrich a contact (picker, auto-enriches last saved, or by handle/name) |
+| `/trust` | View full trust score breakdown (ASCII bar chart) |
+| `/points` | View points balance and recent history |
+| `/shakehistory` | View handshake history with status |
+| `/cancel` | Cancel current conversation state |
+| `/help` | Show available commands with "Open App" button |
 
 ### Key Bot Features
 
@@ -275,9 +306,23 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 - "Regenerate" button
 - Auto-enriches last saved contact from `/newcontact` flow
 
-**Forward Message Handling**:
-- Forwarded messages in bot are parsed for contact info
-- Can create contacts from forwarded Telegram messages
+**Forward Message Handling** (`forward.ts`):
+- Forwarded messages in bot are parsed for sender info (handle, name)
+- Supports Bot API 7.0+ `forward_origin`, legacy `forward_from`, privacy-restricted `forward_sender_name`
+- Checks if sender already exists in contacts (by handle, then by name)
+  - If exists: offers "Add as note" (saves message text as timestamped note, max 10/contact) or "Create new contact anyway"
+- If new: auto-matches forward date to closest itinerary event
+- Shows event confirmation: "Is this the right event?" with yes/pick different/no event options
+- Creates contact linked to selected itinerary/event
+
+**Itinerary/Event Creation** (bot):
+- `/newitinerary`: Sequential fields — title, start date, end date, location, goals (optional); confirmation with edit keyboard
+- `/newevent`: Select itinerary → paste Luma URL or enter manually → select day, type, title, location, times; confirmation with edit keyboard
+
+**Trust & Points** (`trust-points.ts`):
+- `/trust`: ASCII bar chart of all 5 categories + per-signal checkmarks
+- `/points`: Total + last 10 point entries with dates and reasons
+- `/shakehistory`: Paginated list of handshakes with status emojis (pending/matched/minted)
 
 **Account Linking** (`/start {code}`):
 - Links Telegram user to web account
@@ -301,6 +346,10 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 | POST | `?action=compute-trust` | Recompute trust score |
 | POST | `?action=enrich` | AI contact enrichment |
 | GET | `?action=enrich-usage` | Check enrichment usage |
+| GET | `?action=telegram-status` | Check Telegram link status |
+| POST | `?action=generate-link-code` | Generate Telegram link code |
+| DELETE | `?action=unlink-telegram` | Unlink Telegram account |
+| GET/POST | `?action=admin-*` | Admin panel data (admin-gated) |
 
 ### Auth (`api/auth/index.ts`)
 | Method | Action | Description |
@@ -327,7 +376,8 @@ Convenu is an event itinerary + networking app with Web3 "Proof of Handshake" fe
 ### Calendar (`api/calendar/`)
 | Endpoint | Description |
 |----------|-------------|
-| Google Calendar | Import events from Google Calendar |
+| GET `luma?url=` | Fetch and parse Luma event data (validates hostname) |
+| GET `exchange` | Google Calendar OAuth token exchange |
 
 ### Telegram (`api/telegram/webhook.ts`)
 | Endpoint | Description |
