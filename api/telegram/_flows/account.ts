@@ -6,6 +6,7 @@ import { getLinkedUserId } from '../_lib/state.js';
 import { estimateTelegramAccountAgeDays } from '../../_lib/telegram-age.js';
 import { computeTrustCategories } from '../../_lib/trust-categories.js';
 import { mergeAccounts } from '../../_lib/account-merge.js';
+import { handleSubscribe } from './subscribe.js';
 
 export async function handleStart(
   chatId: number,
@@ -67,6 +68,12 @@ export async function handleStart(
         }
       );
     }
+    return;
+  }
+
+  // Deep link from UpgradeModal "Pay with Telegram Stars" button
+  if (args.startsWith('subscribe_')) {
+    await handleSubscribe(chatId, telegramUserId);
     return;
   }
 
