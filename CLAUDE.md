@@ -46,16 +46,17 @@ npx tsc -b --noEmit  # Type-check only
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase admin access
 - `TELEGRAM_BOT_TOKEN` — Telegram Bot API
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — Client-side Supabase
-- `VITE_SOLANA_RPC_URL` — Solana RPC (Helius/QuickNode)
-- `VITE_TREASURY_WALLET` — SOL fee recipient
+- `TREASURY_WALLET` — SOL fee recipient (required for Solana payments)
 
 **Required for Stripe payments:**
 - `STRIPE_SECRET_KEY` — Stripe API key
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret
-- `STRIPE_PRICE_ID_MONTHLY` — Stripe Price ID for $5/month plan
-- `STRIPE_PRICE_ID_ANNUAL` — Stripe Price ID for $45/year plan
+- `STRIPE_PRICE_ID_MONTHLY` — Stripe **Price** ID (`price_...`, NOT Product ID `prod_...`) for $5/month plan
+- `STRIPE_PRICE_ID_ANNUAL` — Stripe **Price** ID (`price_...`) for $45/year plan
 
 **Optional:**
+- `SOLANA_RPC_URL` — Solana RPC for server-side (Helius/QuickNode). Falls back to devnet public RPC
+- `VITE_SOLANA_RPC_URL` — Solana RPC for client-side. Falls back to `clusterApiUrl(network)` (devnet)
 - `BRAVE_SEARCH_API_KEY` — Brave Search API for contact enrichment (free tier: 2,000 queries/month)
 - `ANTHROPIC_API_KEY` — Claude Haiku/Sonnet for contact enrichment LLM summarization
 - `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_CALLBACK_URL` — X OAuth
@@ -109,6 +110,12 @@ npx tsc -b --noEmit  # Type-check only
 
 17. **UpgradeModal is a named export** — Import as `import { UpgradeModal } from './UpgradeModal'`, not default import. Used in both `ProfilePage.tsx` and `ContactsPage.tsx`.
 
+18. **Subscription store must be initialized per page** — `useSubscription()` defaults `isPremium` to `false`. Any page that gates features on `isPremium` (e.g., vCard export, batch enrich) must call `useSubscription().initialize()` in its `useEffect`. `ProfilePage.tsx` does this correctly; `ContactsPage.tsx` was missing it and showed the upgrade modal to premium users. Always call `initSub()` alongside other store initializers.
+
+19. **VITE_ env vars on Vercel serverless functions** — `VITE_`-prefixed variables are a Vite convention for client-side bundling. On Vercel, they're available to serverless functions only if explicitly set in the dashboard. Server-side code should use non-prefixed env var names as primary (`SOLANA_RPC_URL`, `TREASURY_WALLET`) with `VITE_` variants as fallback. All API files in `api/` follow this pattern: `process.env.SOLANA_RPC_URL || process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com'`.
+
+20. **Stripe Price ID vs Product ID** — `STRIPE_PRICE_ID_MONTHLY` and `STRIPE_PRICE_ID_ANNUAL` must be **Price IDs** (`price_...`), not Product IDs (`prod_...`). Stripe's checkout API requires the `price_` prefix. Find the correct IDs in Stripe Dashboard → Product Catalog → click product → Pricing section.
+
 ## Testing Checklist
 
 Before deploying, verify:
@@ -134,7 +141,8 @@ Before deploying, verify:
 - [ ] Subscription: Hitting a limit shows upgrade modal with pricing
 - [ ] Subscription: Stripe checkout creates session and redirects to Stripe
 - [ ] Subscription: Stripe webhook activates premium after successful payment
-- [ ] Subscription: Solana checkout returns correct SOL amount from CoinGecko price
+- [ ] Subscription: Solana checkout returns correct SOL amount from CoinGecko price and treasury wallet
+- [ ] Subscription: Pay with SOL sends transaction and solana-confirm activates premium
 - [ ] Subscription: Premium user gets 100 enrichments, unlimited contacts/itineraries
 - [ ] Subscription: Enhanced AI toggle on enrichment panel uses Sonnet for premium users
 - [ ] Subscription: Batch "Enrich All" enriches up to 10 unenriched contacts (premium only)
