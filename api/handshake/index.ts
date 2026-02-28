@@ -20,6 +20,22 @@ const POINTS_PER_HANDSHAKE = 10;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Expire any pending handshakes past their expires_at.
+ * Runs proactively so stale pending records don't block new initiations.
+ */
+async function expireStaleHandshakes() {
+  const { error } = await supabase
+    .from('handshakes')
+    .update({ status: 'expired' })
+    .eq('status', 'pending')
+    .lt('expires_at', new Date().toISOString());
+
+  if (error) {
+    console.error('Failed to expire stale handshakes:', error);
+  }
+}
+
 // Base58 check for Solana addresses (32-44 chars, no 0/O/I/l)
 function isValidWalletAddress(addr: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
@@ -188,7 +204,7 @@ async function handleInitiate(req: VercelRequest, res: VercelResponse) {
     }
 
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setTime(expiresAt.getTime() + 48 * 60 * 60 * 1000); // 48 hours
 
     const { data: handshake, error: hsError } = await supabase
       .from('handshakes')
@@ -886,6 +902,9 @@ async function handlePending(req: VercelRequest, res: VercelResponse) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    // Proactively expire pending handshakes past their 48-hour window
+    await expireStaleHandshakes();
+
     const action = req.query.action as string;
 
     switch (action) {

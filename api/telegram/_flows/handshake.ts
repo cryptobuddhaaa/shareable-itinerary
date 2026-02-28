@@ -163,7 +163,7 @@ async function initiateHandshakeFromBot(
 
   // Create the handshake
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  expiresAt.setTime(expiresAt.getTime() + 48 * 60 * 60 * 1000); // 48 hours
 
   const { data: handshake, error: hsError } = await supabase
     .from('handshakes')
