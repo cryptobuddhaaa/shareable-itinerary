@@ -460,6 +460,16 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {/* Upgrade to Annual CTA for monthly subscribers */}
+            {subscription?.billingPeriod === 'monthly' && subscription?.paymentProvider !== 'admin' && (
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Upgrade to Annual — save $15/yr
+              </button>
+            )}
+
             {subscription?.paymentProvider === 'stripe' ? (
               <button
                 onClick={() => { stripePortal().catch((e: Error) => toast.error(e.message)); }}

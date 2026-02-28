@@ -16,6 +16,7 @@
  *   stripe-webhook   — Handle Stripe webhook events (POST, no JWT)
  *   solana-checkout  — Get SOL amount for subscription (POST, JWT)
  *   solana-confirm   — Confirm Solana payment (POST, JWT)
+ *   upgrade-annual   — Upgrade monthly→annual via Stripe (POST, JWT)
  *   (none)           — Profile CRUD (GET/PUT, JWT)
  */
 
@@ -33,8 +34,11 @@ import { handleWalletAuth, handleWalletVerify } from '../_lib/wallet-handler.js'
 import {
   getSubscriptionStatus,
   getSubscriptionSolAmount,
+  getUpgradeSolAmount,
   activateSubscription,
   downgradeSubscription,
+  upgradeToAnnual,
+  getActiveSubscription,
   getUserTier,
   getTierLimits,
   type BillingPeriod,
@@ -103,17 +107,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return handleStripePortal(authUser.id, res);
   }
 
+  if (action === 'upgrade-annual' && req.method === 'POST') {
+    return handleStripeUpgradeAnnual(authUser.id, res);
+  }
+
   if (action === 'solana-checkout' && req.method === 'POST') {
     try {
+      const isUpgrade = Boolean(req.body?.upgrade);
       const period = String(req.body?.period || 'monthly') as BillingPeriod;
-      if (period !== 'monthly' && period !== 'annual') {
+      if (!isUpgrade && period !== 'monthly' && period !== 'annual') {
         return res.status(400).json({ error: 'Invalid period. Use "monthly" or "annual".' });
       }
-      const pricing = await getSubscriptionSolAmount(period);
       const treasuryWallet = process.env.TREASURY_WALLET || process.env.VITE_TREASURY_WALLET || '';
       if (!treasuryWallet) {
         return res.status(503).json({ error: 'Solana payments not configured. Please contact support.' });
       }
+
+      if (isUpgrade) {
+        // Verify user has active monthly Solana subscription
+        const sub = await getActiveSubscription(authUser.id);
+        if (!sub || sub.billing_period !== 'monthly' || sub.payment_provider !== 'solana') {
+          return res.status(400).json({ error: 'No active monthly Solana subscription to upgrade' });
+        }
+        const pricing = await getUpgradeSolAmount();
+        return res.status(200).json({
+          ...pricing,
+          treasuryWallet,
+          periodDays: 335, // ~11 months extension
+          period: 'annual',
+          upgrade: true,
+        });
+      }
+
+      const pricing = await getSubscriptionSolAmount(period);
       return res.status(200).json({
         ...pricing,
         treasuryWallet,
@@ -342,6 +368,79 @@ async function handleStripePortal(userId: string, res: VercelResponse) {
   }
 }
 
+// --- Stripe Upgrade (monthly → annual) ---
+
+async function handleStripeUpgradeAnnual(userId: string, res: VercelResponse) {
+  const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+  const STRIPE_PRICE_ID_ANNUAL = process.env.STRIPE_PRICE_ID_ANNUAL;
+
+  if (!STRIPE_SECRET_KEY || !STRIPE_PRICE_ID_ANNUAL) {
+    return res.status(503).json({ error: 'Stripe not configured' });
+  }
+
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('stripe_subscription_id, stripe_customer_id, billing_period, status, payment_provider')
+    .eq('user_id', userId)
+    .single();
+
+  if (!sub?.stripe_subscription_id || sub.payment_provider !== 'stripe' || sub.billing_period !== 'monthly' || sub.status !== 'active') {
+    return res.status(400).json({ error: 'No active monthly Stripe subscription found' });
+  }
+
+  try {
+    // Fetch subscription to get the item ID
+    const subResp = await fetch(`https://api.stripe.com/v1/subscriptions/${sub.stripe_subscription_id}`, {
+      headers: { 'Authorization': `Bearer ${STRIPE_SECRET_KEY}` },
+    });
+
+    if (!subResp.ok) {
+      return res.status(500).json({ error: 'Failed to fetch Stripe subscription' });
+    }
+
+    const stripeSub = await subResp.json() as {
+      items: { data: Array<{ id: string }> };
+    };
+
+    const itemId = stripeSub.items.data[0]?.id;
+    if (!itemId) {
+      return res.status(500).json({ error: 'Could not find subscription item' });
+    }
+
+    // Update to annual price with proration
+    const updateResp = await fetch(`https://api.stripe.com/v1/subscriptions/${sub.stripe_subscription_id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        'items[0][id]': itemId,
+        'items[0][price]': STRIPE_PRICE_ID_ANNUAL,
+        'proration_behavior': 'create_prorations',
+        'metadata[billing_period]': 'annual',
+      }).toString(),
+    });
+
+    if (!updateResp.ok) {
+      const errText = await updateResp.text();
+      console.error('[Stripe] Upgrade error:', updateResp.status, errText);
+      return res.status(500).json({ error: 'Failed to upgrade Stripe subscription' });
+    }
+
+    // Update billing_period immediately (webhook will also sync period_end)
+    await supabase
+      .from('subscriptions')
+      .update({ billing_period: 'annual', updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+
+    return res.status(200).json({ success: true, message: 'Upgraded to annual plan' });
+  } catch (err) {
+    console.error('[Stripe] Upgrade error:', err);
+    return res.status(500).json({ error: 'Failed to upgrade subscription' });
+  }
+}
+
 // --- Stripe Webhook ---
 
 async function handleStripeWebhook(req: VercelRequest, res: VercelResponse) {
@@ -393,6 +492,10 @@ async function handleStripeWebhook(req: VercelRequest, res: VercelResponse) {
         const status = sub.status as string;
         const cancelAtPeriodEnd = sub.cancel_at_period_end as boolean;
         const currentPeriodEnd = sub.current_period_end as number;
+        // Detect billing period from Stripe's price interval
+        const items = (sub as Record<string, unknown>).items as
+          { data: Array<{ price: { recurring: { interval: string } } }> } | undefined;
+        const interval = items?.data?.[0]?.price?.recurring?.interval;
 
         if (customerId) {
           const updates: Record<string, unknown> = {
@@ -403,6 +506,8 @@ async function handleStripeWebhook(req: VercelRequest, res: VercelResponse) {
           if (currentPeriodEnd) {
             updates.current_period_end = new Date(currentPeriodEnd * 1000).toISOString();
           }
+          if (interval === 'year') updates.billing_period = 'annual';
+          else if (interval === 'month') updates.billing_period = 'monthly';
 
           await supabase
             .from('subscriptions')
@@ -453,7 +558,8 @@ async function handleStripeWebhook(req: VercelRequest, res: VercelResponse) {
 // --- Solana Confirm ---
 
 async function handleSolanaConfirm(userId: string, req: VercelRequest, res: VercelResponse) {
-  const { txSignature, period } = req.body || {};
+  const { txSignature, period, upgrade } = req.body || {};
+  const isUpgrade = Boolean(upgrade);
 
   if (!txSignature || typeof txSignature !== 'string') {
     return res.status(400).json({ error: 'txSignature is required' });
@@ -514,6 +620,19 @@ async function handleSolanaConfirm(userId: string, req: VercelRequest, res: Verc
     }
 
     const lamports = transferIx.parsed?.info?.lamports || 0;
+
+    if (isUpgrade) {
+      // Upgrade: expect $40 worth of SOL
+      const upgradePricing = await getUpgradeSolAmount();
+      const expectedLamports = Math.floor(upgradePricing.sol * 1e9);
+      if (lamports < expectedLamports * 0.95) {
+        return res.status(400).json({ error: 'Insufficient upgrade payment amount' });
+      }
+      await upgradeToAnnual(userId, { solanaTxSignature: txSignature });
+      return res.status(200).json({ success: true, tier: 'premium', billingPeriod: 'annual', upgraded: true });
+    }
+
+    // Fresh subscription
     const expectedPricing = await getSubscriptionSolAmount(billingPeriod);
     const expectedLamports = Math.floor(expectedPricing.sol * 1e9);
 

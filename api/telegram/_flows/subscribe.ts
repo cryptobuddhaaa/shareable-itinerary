@@ -5,8 +5,10 @@ import { sendMessage, answerCallbackQuery } from '../_lib/telegram.js';
 import { getLinkedUserId } from '../_lib/state.js';
 import {
   PRICES,
-  getUserTier,
+  UPGRADE_PRICES,
+  getSubscriptionStatus,
   activateSubscription,
+  upgradeToAnnual,
 } from '../../_lib/subscription.js';
 import type { BillingPeriod } from '../../_lib/subscription.js';
 
@@ -68,9 +70,36 @@ export async function handleSubscribe(chatId: number, telegramUserId: number) {
     return;
   }
 
-  // Check if already premium
-  const tier = await getUserTier(userId);
-  if (tier === 'premium') {
+  // Check current subscription status
+  const subStatus = await getSubscriptionStatus(userId);
+
+  if (subStatus.tier === 'premium') {
+    // Monthly Stars subscriber → offer upgrade to annual
+    if (subStatus.billingPeriod === 'monthly' && subStatus.paymentProvider === 'telegram_stars') {
+      const daysLeft = subStatus.currentPeriodEnd
+        ? Math.max(0, Math.ceil((new Date(subStatus.currentPeriodEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+        : 0;
+
+      await sendMessage(
+        chatId,
+        '<b>⬆️ Upgrade to Annual</b>\n\n' +
+          `You're on the <b>Monthly</b> plan (${daysLeft} days remaining).\n\n` +
+          `Upgrade to Annual for <b>${UPGRADE_PRICES.stars} Stars</b> (save ${PRICES.monthly.stars} Stars!).\n` +
+          `Your subscription will extend <b>11 months</b> from your current expiry date.\n\n` +
+          'Choose an option:',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: `Upgrade to Annual (${UPGRADE_PRICES.stars} ⭐)`, callback_data: 'sb:upgrade' }],
+              [{ text: 'Stay on Monthly', callback_data: 'sb:back' }],
+            ],
+          },
+        }
+      );
+      return;
+    }
+
+    // Already annual or different provider
     await sendMessage(
       chatId,
       '⭐ You already have <b>Convenu Premium</b>!\n\n' +
@@ -79,7 +108,7 @@ export async function handleSubscribe(chatId: number, telegramUserId: number) {
     return;
   }
 
-  // Show pricing with inline buttons
+  // Free user — show pricing
   await sendMessage(
     chatId,
     '<b>⭐ Convenu Premium</b>\n\n' +
@@ -148,6 +177,48 @@ export async function handleSubscribeCallback(
     return;
   }
 
+  // --- Upgrade from monthly to annual ---
+  if (action === 'upgrade') {
+    const subStatus = await getSubscriptionStatus(userId);
+    if (subStatus.billingPeriod !== 'monthly' || subStatus.paymentProvider !== 'telegram_stars') {
+      await sendMessage(chatId, '❌ Upgrade is only available for monthly Telegram Stars subscribers.');
+      return;
+    }
+
+    const payload = JSON.stringify({
+      userId,
+      telegramUserId,
+      period: 'annual' as BillingPeriod,
+      upgrade: true,
+    });
+
+    const invoiceUrl = await createInvoiceLink(
+      'Convenu Premium Upgrade (Annual)',
+      'Upgrade from monthly to annual — 11 months added to your current subscription.',
+      payload,
+      [{ label: 'Upgrade to Annual', amount: UPGRADE_PRICES.stars }]
+    );
+
+    if (!invoiceUrl) {
+      await sendMessage(chatId, '❌ Failed to create payment. Please try again.');
+      return;
+    }
+
+    await sendMessage(
+      chatId,
+      `💫 <b>Upgrade to Annual</b>\n\nPrice: <b>${UPGRADE_PRICES.stars} Stars</b>\n\nTap below to pay:`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: `Pay ${UPGRADE_PRICES.stars} ⭐`, url: invoiceUrl }],
+            [{ text: '« Back', callback_data: 'sb:back' }],
+          ],
+        },
+      }
+    );
+    return;
+  }
+
   if (action !== 'monthly' && action !== 'annual') {
     await sendMessage(chatId, '❌ Invalid option.');
     return;
@@ -208,6 +279,7 @@ export async function handlePreCheckoutQuery(preCheckoutQuery: {
       userId: string;
       telegramUserId: number;
       period: BillingPeriod;
+      upgrade?: boolean;
     };
 
     // Validate the user is linked
@@ -217,8 +289,11 @@ export async function handlePreCheckoutQuery(preCheckoutQuery: {
       return;
     }
 
-    // Validate amount matches expected price
-    const expectedStars = PRICES[payload.period]?.stars;
+    // Validate amount matches expected price (upgrade or fresh)
+    const expectedStars = payload.upgrade
+      ? UPGRADE_PRICES.stars
+      : PRICES[payload.period]?.stars;
+
     if (!expectedStars || preCheckoutQuery.total_amount !== expectedStars) {
       await answerPreCheckout(preCheckoutQuery.id, false, 'Price mismatch. Please try again.');
       return;
@@ -250,6 +325,7 @@ export async function handleSuccessfulPayment(
       userId: string;
       telegramUserId: number;
       period: BillingPeriod;
+      upgrade?: boolean;
     };
 
     const userId = await getLinkedUserId(telegramUserId);
@@ -258,7 +334,24 @@ export async function handleSuccessfulPayment(
       return;
     }
 
-    // Activate premium subscription
+    if (payload.upgrade) {
+      // Upgrade monthly → annual
+      await upgradeToAnnual(userId, {
+        telegramChargeId: payment.telegram_payment_charge_id,
+      });
+
+      await sendMessage(
+        chatId,
+        '🎉 <b>Upgraded to Annual!</b>\n\n' +
+          'Your subscription has been extended by <b>11 months</b> from your current expiry date.\n\n' +
+          'Enjoy your continued Premium access!'
+      );
+
+      console.log(`[Subscribe] Telegram Stars upgrade confirmed for user ${userId}, charge: ${payment.telegram_payment_charge_id}`);
+      return;
+    }
+
+    // Fresh subscription
     await activateSubscription(userId, 'telegram_stars', payload.period, {
       telegramChargeId: payment.telegram_payment_charge_id,
     });

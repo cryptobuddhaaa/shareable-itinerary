@@ -292,6 +292,78 @@ export async function getSubscriptionSolAmount(period: BillingPeriod): Promise<{
   return { sol, usd, solPrice };
 }
 
+// --- Upgrade Pricing ---
+
+export const UPGRADE_PRICES = {
+  usd: PRICES.annual.usd - PRICES.monthly.usd,           // $40
+  usdCents: PRICES.annual.usdCents - PRICES.monthly.usdCents, // 4000
+  stars: PRICES.annual.stars - PRICES.monthly.stars,       // 2650
+} as const;
+
+/**
+ * Get active premium subscription for a user (or null).
+ */
+export async function getActiveSubscription(userId: string) {
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .eq('tier', 'premium')
+    .single();
+  return data;
+}
+
+/**
+ * Upgrade a monthly subscription to annual (Solana/Stars only).
+ * Extends period_end by 11 months from current expiry.
+ * Stripe upgrades are handled via Stripe's subscription modification API.
+ */
+export async function upgradeToAnnual(
+  userId: string,
+  extras?: { solanaTxSignature?: string; telegramChargeId?: string }
+): Promise<void> {
+  const sub = await getActiveSubscription(userId);
+  if (!sub || sub.billing_period !== 'monthly') {
+    throw new Error('No active monthly subscription to upgrade');
+  }
+
+  const currentEnd = new Date(sub.current_period_end);
+  const newEnd = new Date(currentEnd);
+  newEnd.setMonth(newEnd.getMonth() + 11);
+
+  const updates: Record<string, unknown> = {
+    billing_period: 'annual',
+    current_period_end: newEnd.toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (extras?.solanaTxSignature) updates.solana_tx_signature = extras.solanaTxSignature;
+  if (extras?.telegramChargeId) updates.telegram_charge_id = extras.telegramChargeId;
+
+  const { error } = await supabase
+    .from('subscriptions')
+    .update(updates)
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('[Subscription] Upgrade to annual error:', error);
+    throw new Error('Failed to upgrade subscription');
+  }
+
+  console.log(`[Subscription] Upgraded user ${userId} from monthly to annual`);
+}
+
+/**
+ * Calculate SOL amount for upgrade ($40 instead of $45).
+ */
+export async function getUpgradeSolAmount(): Promise<{ sol: number; usd: number; solPrice: number }> {
+  const usd = UPGRADE_PRICES.usd;
+  const solPrice = await getSolPrice();
+  const sol = Math.ceil((usd / solPrice) * 1e6) / 1e6;
+  return { sol, usd, solPrice };
+}
+
 // --- Expiration Helpers ---
 
 /**

@@ -30,8 +30,9 @@ interface SubscriptionState {
   refresh: () => Promise<void>;
   stripeCheckout: (period: BillingPeriod) => Promise<void>;
   stripePortal: () => Promise<void>;
-  solanaCheckout: (period: BillingPeriod) => Promise<{ sol: number; usd: number; solPrice: number; treasuryWallet: string; periodDays: number }>;
-  solanaConfirm: (txSignature: string, period: BillingPeriod) => Promise<void>;
+  solanaCheckout: (period: BillingPeriod, upgrade?: boolean) => Promise<{ sol: number; usd: number; solPrice: number; treasuryWallet: string; periodDays: number }>;
+  solanaConfirm: (txSignature: string, period: BillingPeriod, upgrade?: boolean) => Promise<void>;
+  stripeUpgradeAnnual: () => Promise<void>;
   reset: () => void;
 }
 
@@ -113,10 +114,10 @@ export const useSubscription = create<SubscriptionState>((set, get) => ({
     window.location.href = url;
   },
 
-  solanaCheckout: async (period: BillingPeriod) => {
+  solanaCheckout: async (period: BillingPeriod, upgrade?: boolean) => {
     const resp = await authFetch('/api/profile?action=solana-checkout', {
       method: 'POST',
-      body: JSON.stringify({ period }),
+      body: JSON.stringify({ period, ...(upgrade ? { upgrade: true } : {}) }),
     });
 
     if (!resp.ok) {
@@ -127,10 +128,10 @@ export const useSubscription = create<SubscriptionState>((set, get) => ({
     return await resp.json();
   },
 
-  solanaConfirm: async (txSignature: string, period: BillingPeriod) => {
+  solanaConfirm: async (txSignature: string, period: BillingPeriod, upgrade?: boolean) => {
     const resp = await authFetch('/api/profile?action=solana-confirm', {
       method: 'POST',
-      body: JSON.stringify({ txSignature, period }),
+      body: JSON.stringify({ txSignature, period, ...(upgrade ? { upgrade: true } : {}) }),
     });
 
     if (!resp.ok) {
@@ -139,6 +140,19 @@ export const useSubscription = create<SubscriptionState>((set, get) => ({
     }
 
     // Refresh subscription status after successful payment
+    await get().refresh();
+  },
+
+  stripeUpgradeAnnual: async () => {
+    const resp = await authFetch('/api/profile?action=upgrade-annual', {
+      method: 'POST',
+    });
+
+    if (!resp.ok) {
+      const data = await resp.json();
+      throw new Error(data.error || 'Failed to upgrade');
+    }
+
     await get().refresh();
   },
 
