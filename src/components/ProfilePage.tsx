@@ -63,6 +63,28 @@ export default function ProfilePage() {
     if (user) initSub();
   }, [user, initSub]);
 
+  // Handle X OAuth callback query params on mount (before auth resolves)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('x_verified') === 'true') {
+      setXVerified(true);
+      toast.success('X account verified successfully');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('x_error')) {
+      const errMap: Record<string, string> = {
+        denied: 'X authorization was denied',
+        invalid_state: 'Invalid OAuth state — please try again',
+        expired: 'OAuth session expired — please try again',
+        token_exchange: 'Failed to exchange token with X',
+        user_fetch: 'Failed to fetch X user info',
+        already_linked: 'This X account is already verified by another user',
+        server: 'Server error during X verification',
+      };
+      toast.error(errMap[params.get('x_error')!] || 'X verification failed');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
 
@@ -125,26 +147,6 @@ export default function ProfilePage() {
     };
 
     load();
-
-    // Handle X OAuth callback query params
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('x_verified') === 'true') {
-      setXVerified(true);
-      toast.success('X account verified successfully');
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (params.get('x_error')) {
-      const errMap: Record<string, string> = {
-        denied: 'X authorization was denied',
-        invalid_state: 'Invalid OAuth state — please try again',
-        expired: 'OAuth session expired — please try again',
-        token_exchange: 'Failed to exchange token with X',
-        user_fetch: 'Failed to fetch X user info',
-        already_linked: 'This X account is already verified by another user',
-        server: 'Server error during X verification',
-      };
-      toast.error(errMap[params.get('x_error')!] || 'X verification failed');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
   }, [user]);
 
   const handleSave = async () => {

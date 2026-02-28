@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const webhookResult = await tgApi('setWebhook', {
     url: webhookUrl,
     secret_token: webhookSecret,
-    allowed_updates: ['message', 'callback_query'],
+    allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
   });
 
   // 2. Register bot commands (visible in the "/" menu)
@@ -85,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { command: 'contacted', description: 'Mark a follow-up (@handle)' },
       { command: 'handshake', description: 'Send a Proof of Handshake' },
       { command: 'enrich', description: 'AI-research a contact' },
+      { command: 'subscribe', description: 'Upgrade to Convenu Premium' },
       { command: 'trust', description: 'View your trust score' },
       { command: 'points', description: 'Check your points balance' },
       { command: 'shakehistory', description: 'View handshake history' },
